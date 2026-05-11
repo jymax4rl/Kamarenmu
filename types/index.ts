@@ -79,3 +79,20 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
 }
+
+export interface DictionaryEntry {
+  _id: string;
+  soninke: string;
+  english: string;
+  phonetic?: string;
+  partOfSpeech?: string;
+  definition?: string;
+  example?: string;
+  kemetRapprochement?: string;
+  status: "pending" | "approved" | "rejected";
+  submittedBy?: string;
+  submittedByEmail?: string;
+  validatedBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}

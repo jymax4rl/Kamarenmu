@@ -11,6 +11,8 @@ import {
   BsInfoCircleFill,
   BsPerson,
   BsPersonFill,
+  BsBook,
+  BsBookFill,
 } from "react-icons/bs";
 
 const tabs = [
@@ -21,6 +23,7 @@ const tabs = [
     IconOutline: BsFileText,
     IconFill: BsFileTextFill,
   },
+  { href: "/dictionary", label: "Dict.", IconOutline: BsBook, IconFill: BsBookFill },
   { href: "/news", label: "News", IconOutline: BsNewspaper, IconFill: BsNewspaper },
   {
     href: "/about",
@@ -42,7 +45,7 @@ export function BottomNav() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pointer-events-none">
       <div
-        className="pointer-events-auto w-full max-w-md h-16 px-3 sm:px-5 bg-white/90 backdrop-blur-md rounded-t-3xl shadow-nav flex items-center justify-between gap-0 border-t border-amber-100/80"
+        className="pointer-events-auto w-full max-w-md h-16 px-1 sm:px-3 bg-white/90 backdrop-blur-md rounded-t-3xl shadow-nav flex items-center justify-between gap-0 border-t border-amber-100/80"
         aria-label="Main navigation"
       >
         {tabs.map(({ href, label, IconOutline, IconFill }) => {
