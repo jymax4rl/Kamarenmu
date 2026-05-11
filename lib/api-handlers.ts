@@ -21,19 +21,22 @@ export function parsePagination(searchParams: URLSearchParams) {
 }
 
 /**
- * Returns a 401/403 NextResponse if the request is not from an authenticated
- * admin, or null if the caller may proceed.
+ * Returns a 401/403 NextResponse if the caller is not an authenticated admin,
+ * or null if the caller may proceed.
  *
- * Admin = any signed-in user when ADMIN_EMAIL is unset;
- *       = the specific email in ADMIN_EMAIL when it is set.
+ * Admin = session.user.role === 'admin'  (stored in MongoDB + JWT)
+ * Bootstrap override: ADMIN_EMAIL env var always grants admin access
+ * so the first admin can set themselves without a DB round-trip.
  */
 export async function requireAdmin(): Promise<NextResponse | null> {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
     return jsonError("Unauthorized", 401);
   }
-  const adminEmail = process.env.ADMIN_EMAIL?.trim();
-  if (adminEmail && session.user.email !== adminEmail) {
+  const bootstrapEmail = process.env.ADMIN_EMAIL?.trim();
+  const isBootstrap = Boolean(bootstrapEmail && session.user.email === bootstrapEmail);
+  const isAdminRole = session.user.role === "admin";
+  if (!isBootstrap && !isAdminRole) {
     return jsonError("Forbidden", 403);
   }
   return null;

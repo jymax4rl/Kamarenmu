@@ -1,11 +1,134 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input, TextArea } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import type { DictionaryEntry } from "@/types";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+interface SiteUser {
+  _id: string;
+  email: string;
+  name?: string;
+  image?: string;
+  role: "user" | "admin";
+  isActive: boolean;
+  createdAt?: string;
+}
+
+// ─── User management panel ───────────────────────────────────────────────────
+function UsersPanel() {
+  const [users, setUsers] = useState<SiteUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/users?limit=50");
+      const json = await res.json();
+      if (json.ok) setUsers(json.data.items);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function toggleRole(user: SiteUser) {
+    const newRole = user.role === "admin" ? "user" : "admin";
+    setBusy((b) => ({ ...b, [user._id]: true }));
+    try {
+      const res = await fetch("/api/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: user._id, role: newRole }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setUsers((prev) =>
+          prev.map((u) => (u._id === user._id ? { ...u, role: newRole } : u))
+        );
+      }
+    } catch { /* ignore */ }
+    finally { setBusy((b) => ({ ...b, [user._id]: false })); }
+  }
+
+  if (loading) return <p className="text-sm text-gray-400 py-4 text-center">Chargement…</p>;
+
+  if (users.length === 0) {
+    return (
+      <p className="text-sm text-gray-400 py-4 text-center">
+        Aucun utilisateur inscrit pour l&apos;instant.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {users.map((user) => (
+        <div
+          key={user._id}
+          className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-white px-3 py-2.5"
+        >
+          {/* Avatar */}
+          {user.image ? (
+            <Image
+              src={user.image}
+              alt=""
+              width={36}
+              height={36}
+              className="rounded-full object-cover flex-shrink-0"
+            />
+          ) : (
+            <div className="h-9 w-9 rounded-full bg-amber-100 flex items-center justify-center text-amber-900 font-bold text-sm flex-shrink-0">
+              {(user.name || user.email).charAt(0).toUpperCase()}
+            </div>
+          )}
+
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-900 truncate">
+              {user.name || "—"}
+            </p>
+            <p className="text-xs text-gray-400 truncate">{user.email}</p>
+          </div>
+
+          {/* Role badge + toggle */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Badge
+              tone={user.role === "admin" ? "default" : "muted"}
+              className="text-[10px]"
+            >
+              {user.role}
+            </Badge>
+            <button
+              type="button"
+              onClick={() => toggleRole(user)}
+              disabled={busy[user._id]}
+              className={`text-xs font-semibold rounded-full px-3 py-1 transition ${
+                user.role === "admin"
+                  ? "bg-red-50 text-red-600 hover:bg-red-100"
+                  : "bg-green-50 text-green-700 hover:bg-green-100"
+              }`}
+            >
+              {busy[user._id]
+                ? "…"
+                : user.role === "admin"
+                ? "Rétrograder"
+                : "Promouvoir"}
+            </button>
+          </div>
+        </div>
+      ))}
+      <p className="text-[11px] text-gray-400 text-center pt-1">
+        {users.length} membre{users.length !== 1 ? "s" : ""} inscrit{users.length !== 1 ? "s" : ""}
+      </p>
+    </div>
+  );
+}
 
 function PendingDictionaryEntries() {
   const [entries, setEntries] = useState<DictionaryEntry[]>([]);
@@ -532,6 +655,18 @@ export function AdminForms() {
             Publish news
           </Button>
         </form>
+      </Card>
+
+      {/* Users & roles */}
+      <Card className="space-y-4 border-gray-200/80">
+        <div>
+          <h2 className="font-bold text-gray-900">Membres inscrits</h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Promouvez un utilisateur en admin ou révoquez ses droits.
+            Le changement prend effet à sa prochaine connexion.
+          </p>
+        </div>
+        <UsersPanel />
       </Card>
 
       {/* Team management */}

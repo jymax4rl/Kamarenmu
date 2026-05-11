@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
 import { SignOutButton } from "@/components/account/SignOutButton";
 
 export default async function AccountPage() {
@@ -37,15 +38,26 @@ export default async function AccountPage() {
             {(u.name || u.email || "?").charAt(0).toUpperCase()}
           </div>
         )}
-        <div>
+        <div className="space-y-1.5">
           <p className="text-lg font-semibold text-gray-900">
             {u.name || "Community member"}
           </p>
           <p className="text-sm text-gray-500 break-all">{u.email}</p>
-          {u.id && (
-            <p className="text-[11px] text-gray-400 mt-2 font-mono">
-              ID: {u.id}
-            </p>
+          <div className="flex justify-center pt-1">
+            <Badge
+              tone={u.role === "admin" ? "default" : "muted"}
+              className="text-xs"
+            >
+              {u.role === "admin" ? "Administrateur" : "Membre"}
+            </Badge>
+          </div>
+          {u.role === "admin" && (
+            <Link
+              href="/admin"
+              className="block text-xs text-amber-600 font-semibold hover:underline mt-1"
+            >
+              → Panneau d&apos;administration
+            </Link>
           )}
         </div>
       </Card>

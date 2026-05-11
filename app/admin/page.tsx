@@ -5,12 +5,16 @@ import { AdminForms } from "./AdminForms";
 
 export default async function AdminPage() {
   const session = await getServerSession(authOptions);
+
   if (!session?.user?.email) {
     redirect("/auth/signin?callbackUrl=/admin");
   }
 
-  const adminEmail = process.env.ADMIN_EMAIL?.trim();
-  if (adminEmail && session.user.email !== adminEmail) {
+  const bootstrapEmail = process.env.ADMIN_EMAIL?.trim();
+  const isBootstrap = Boolean(bootstrapEmail && session.user.email === bootstrapEmail);
+  const isAdmin = session.user.role === "admin" || isBootstrap;
+
+  if (!isAdmin) {
     redirect("/");
   }
 
