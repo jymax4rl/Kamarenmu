@@ -7,6 +7,7 @@ import { signOut, useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { HiOutlineMenuAlt3, HiOutlineSearch } from "react-icons/hi";
 import { IoClose } from "react-icons/io5";
+import { BsShieldFill } from "react-icons/bs";
 import { motion, AnimatePresence } from "framer-motion";
 
 const NAV_LINKS = [
@@ -65,10 +66,13 @@ export function Header() {
           <button
             type="button"
             onClick={() => setMenuOpen(true)}
-            className="flex-shrink-0 flex items-center justify-center rounded-full h-11 w-11 text-gray-700 hover:bg-gray-100 transition active:scale-95"
+            className="flex-shrink-0 relative flex items-center justify-center rounded-full h-11 w-11 text-gray-700 hover:bg-gray-100 transition active:scale-95"
             aria-label="Open menu"
           >
             <HiOutlineMenuAlt3 className="text-2xl" />
+            {status === "authenticated" && session?.user?.role === "admin" && (
+              <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white" />
+            )}
           </button>
         </div>
       </header>
@@ -125,6 +129,21 @@ export function Header() {
                     </Link>
                   );
                 })}
+
+                {status === "authenticated" && session?.user?.role === "admin" && (
+                  <Link
+                    href="/admin"
+                    onClick={() => setMenuOpen(false)}
+                    className={`flex items-center gap-2.5 rounded-2xl px-4 py-3 text-sm font-semibold transition mt-1 ${
+                      pathname.startsWith("/admin")
+                        ? "bg-amber-600 text-white"
+                        : "bg-amber-50 text-amber-800 hover:bg-amber-100"
+                    }`}
+                  >
+                    <BsShieldFill className="text-base flex-shrink-0" />
+                    Administration
+                  </Link>
+                )}
               </nav>
 
               <div className="p-4 border-t border-amber-100 space-y-3 bg-amber-50/40">
