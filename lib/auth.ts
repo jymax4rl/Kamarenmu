@@ -64,25 +64,37 @@ export const authOptions: NextAuthOptions = {
       return true;
     },
 
-    // Embed role in the JWT at sign-in time
+    // Embed role in the JWT on every validation so that:
+    // - ADMIN_EMAIL changes take effect without requiring sign-out
+    // - Promotions made in the admin panel apply on the next page load
     async jwt({ token, user }) {
       if (user) {
-        // Initial sign-in: read freshly-created role from DB
-        try {
-          await connectDB();
-          const dbUser = await User.findOne({
-            email: user.email?.toLowerCase(),
-          })
-            .select("role isActive")
-            .lean();
-          token.role = dbUser?.role ?? (isBootstrapAdmin(user.email) ? "admin" : "user");
-          token.isActive = dbUser?.isActive ?? true;
-        } catch {
-          token.role = isBootstrapAdmin(user.email) ? "admin" : "user";
-          token.isActive = true;
-        }
+        // Initial sign-in: persist user id
         token.id = user.id;
       }
+
+      // Re-read role from DB on every JWT check so promotions/demotions
+      // are picked up without forcing users to sign out.
+      // token.email is always present (set by NextAuth from the Google profile).
+      const email = (token.email as string | undefined)?.toLowerCase();
+      if (email) {
+        try {
+          await connectDB();
+          const dbUser = await User.findOne({ email })
+            .select("role isActive")
+            .lean();
+          token.role = dbUser?.role ?? "user";
+          token.isActive = dbUser?.isActive ?? true;
+        } catch {
+          // DB unavailable — fall back without crashing
+        }
+      }
+
+      // Bootstrap override: ADMIN_EMAIL always wins regardless of DB state
+      if (isBootstrapAdmin(email)) {
+        token.role = "admin";
+      }
+
       return token as JWT & { role: string; isActive: boolean };
     },
 
