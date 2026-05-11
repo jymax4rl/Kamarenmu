@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --soninke-cream: #fffbeb;
+}
+
+body {
+  @apply bg-soninke-cream text-gray-800 antialiased;
+  background-image: radial-gradient(
+      circle at 20% 10%,
+      rgba(217, 119, 6, 0.06) 0%,
+      transparent 45%
+    ),
+    radial-gradient(
+      circle at 80% 90%,
+      rgba(5, 150, 105, 0.05) 0%,
+      transparent 40%
+    );
+  min-height: 100dvh;
+}
+
+/* Prose tweaks for article/news bodies */
+.prose-soninke {
+  @apply prose prose-gray max-w-none prose-headings:text-gray-900 prose-a:text-amber-600;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

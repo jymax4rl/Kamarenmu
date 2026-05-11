@@ -1,0 +1,81 @@
+export interface President {
+  _id: string;
+  fullName: string;
+  photo: string;
+  biography: string;
+  mandateStart: string;
+  mandateEnd?: string;
+  isCurrent: boolean;
+  contactEmail?: string;
+  phone?: string;
+  socialLinks?: {
+    facebook?: string;
+    twitter?: string;
+    instagram?: string;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Administrator {
+  _id: string;
+  fullName: string;
+  photo: string;
+  role: string;
+  department: string;
+  biography: string;
+  email: string;
+  phone?: string;
+  isActive: boolean;
+  order: number;
+  socialLinks?: {
+    facebook?: string;
+    twitter?: string;
+    linkedin?: string;
+  };
+}
+
+export interface Article {
+  _id: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  content: string;
+  coverImage: string;
+  author: string;
+  category: string;
+  tags: string[];
+  isPublished: boolean;
+  publishedAt: string;
+  readTime: number;
+}
+
+export interface NewsItem {
+  _id: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  content: string;
+  coverImage: string;
+  author: string;
+  isBreaking: boolean;
+  category: string;
+  isPublished: boolean;
+  publishedAt: string;
+}
+
+export interface Paginated<T> {
+  items: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
+export interface ApiResponse<T> {
+  ok: boolean;
+  data?: T;
+  error?: string;
+}
