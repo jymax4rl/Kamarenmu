@@ -272,6 +272,148 @@ function FlaggedDictionaryEntries() {
   );
 }
 
+// ─── Administrator form ───────────────────────────────────────────────────────
+
+function AdministratorForm({ onDone }: { onDone: (msg: string) => void }) {
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setBusy(true);
+    const fd = new FormData(e.currentTarget);
+    const payload = {
+      fullName: String(fd.get("fullName") || "").trim(),
+      photo: String(fd.get("photo") || "").trim(),
+      role: String(fd.get("role") || "").trim(),
+      department: String(fd.get("department") || "").trim(),
+      biography: String(fd.get("biography") || "").trim(),
+      email: String(fd.get("email") || "").trim(),
+      phone: String(fd.get("phone") || "").trim() || undefined,
+      isActive: true,
+      order: parseInt(String(fd.get("order") || "0"), 10) || 0,
+      socialLinks: {
+        facebook: String(fd.get("facebook") || "").trim() || undefined,
+        twitter: String(fd.get("twitter") || "").trim() || undefined,
+        linkedin: String(fd.get("linkedin") || "").trim() || undefined,
+      },
+    };
+    const res = await fetch("/api/administrators", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    setBusy(false);
+    if (!json.ok) { onDone(json.error || "Erreur"); return; }
+    onDone(`✓ ${payload.fullName} ajouté à l'équipe.`);
+    (e.target as HTMLFormElement).reset();
+  }
+
+  return (
+    <form className="space-y-3" onSubmit={handleSubmit}>
+      <div className="grid grid-cols-2 gap-3">
+        <Input name="fullName" placeholder="Nom complet *" required />
+        <Input name="role" placeholder="Rôle * (ex: Secrétaire)" required />
+      </div>
+      <Input name="department" placeholder="Département * (ex: Communication)" required />
+      <Input name="email" type="email" placeholder="E-mail *" required />
+      <Input name="phone" type="tel" placeholder="Téléphone (optionnel)" />
+      <Input name="photo" placeholder="URL photo *" required />
+      <TextArea name="biography" placeholder="Biographie *" required className="min-h-[80px]" />
+      <Input name="order" type="number" placeholder="Ordre d'affichage (0 = premier)" min={0} />
+      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide pt-1">
+        Réseaux sociaux (optionnel)
+      </p>
+      <div className="grid grid-cols-3 gap-2">
+        <Input name="facebook" placeholder="Facebook URL" />
+        <Input name="twitter" placeholder="Twitter URL" />
+        <Input name="linkedin" placeholder="LinkedIn URL" />
+      </div>
+      <Button type="submit" className="w-full" disabled={busy}>
+        {busy ? "Ajout…" : "Ajouter à l'équipe"}
+      </Button>
+    </form>
+  );
+}
+
+// ─── President form ───────────────────────────────────────────────────────────
+
+function PresidentForm({ onDone }: { onDone: (msg: string) => void }) {
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setBusy(true);
+    const fd = new FormData(e.currentTarget);
+    const payload = {
+      fullName: String(fd.get("fullName") || "").trim(),
+      photo: String(fd.get("photo") || "").trim(),
+      biography: String(fd.get("biography") || "").trim(),
+      mandateStart: String(fd.get("mandateStart") || "").trim(),
+      mandateEnd: String(fd.get("mandateEnd") || "").trim() || undefined,
+      isCurrent: fd.get("isCurrent") === "on",
+      contactEmail: String(fd.get("contactEmail") || "").trim() || undefined,
+      phone: String(fd.get("phone") || "").trim() || undefined,
+      socialLinks: {
+        facebook: String(fd.get("facebook") || "").trim() || undefined,
+        twitter: String(fd.get("twitter") || "").trim() || undefined,
+        instagram: String(fd.get("instagram") || "").trim() || undefined,
+      },
+    };
+    const res = await fetch("/api/presidents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    setBusy(false);
+    if (!json.ok) { onDone(json.error || "Erreur"); return; }
+    onDone(`✓ ${payload.fullName} ajouté${payload.isCurrent ? " comme président actuel" : ""}.`);
+    (e.target as HTMLFormElement).reset();
+  }
+
+  return (
+    <form className="space-y-3" onSubmit={handleSubmit}>
+      <Input name="fullName" placeholder="Nom complet *" required />
+      <Input name="photo" placeholder="URL photo *" required />
+      <TextArea name="biography" placeholder="Biographie *" required className="min-h-[80px]" />
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <label className="text-xs text-gray-500 font-semibold uppercase tracking-wide">
+            Début du mandat *
+          </label>
+          <Input name="mandateStart" type="date" required />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs text-gray-500 font-semibold uppercase tracking-wide">
+            Fin du mandat
+          </label>
+          <Input name="mandateEnd" type="date" />
+        </div>
+      </div>
+      <Input name="contactEmail" type="email" placeholder="E-mail de contact (optionnel)" />
+      <Input name="phone" type="tel" placeholder="Téléphone (optionnel)" />
+      <label className="flex items-center gap-2 text-sm text-gray-700 font-semibold">
+        <input type="checkbox" name="isCurrent" className="rounded border-amber-300 accent-amber-600" />
+        Président actuel (affiché sur l&apos;accueil)
+      </label>
+      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide pt-1">
+        Réseaux sociaux (optionnel)
+      </p>
+      <div className="grid grid-cols-3 gap-2">
+        <Input name="facebook" placeholder="Facebook" />
+        <Input name="twitter" placeholder="Twitter" />
+        <Input name="instagram" placeholder="Instagram" />
+      </div>
+      <Button type="submit" className="w-full" disabled={busy}>
+        {busy ? "Ajout…" : "Ajouter le président"}
+      </Button>
+    </form>
+  );
+}
+
+// ─── Main admin form ──────────────────────────────────────────────────────────
+
 export function AdminForms() {
   const [status, setStatus] = useState<string>("");
 
@@ -390,6 +532,27 @@ export function AdminForms() {
             Publish news
           </Button>
         </form>
+      </Card>
+
+      {/* Team management */}
+      <Card className="space-y-4 border-blue-100/80">
+        <div>
+          <h2 className="font-bold text-gray-900">Équipe — ajouter un administrateur</h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Apparaît sur la page About une fois ajouté.
+          </p>
+        </div>
+        <AdministratorForm onDone={(msg) => setStatus(msg)} />
+      </Card>
+
+      <Card className="space-y-4 border-purple-100/80">
+        <div>
+          <h2 className="font-bold text-gray-900">Présidence — ajouter / mettre à jour</h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Cochez &quot;Président actuel&quot; pour l&apos;afficher sur l&apos;accueil et About.
+          </p>
+        </div>
+        <PresidentForm onDone={(msg) => setStatus(msg)} />
       </Card>
 
       {/* Dictionary — pending submissions */}
