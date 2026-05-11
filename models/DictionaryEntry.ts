@@ -8,7 +8,9 @@ export interface IDictionaryEntry {
   definition?: string;
   example?: string;
   kemetRapprochement?: string;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "flagged";
+  upvotes: number;
+  downvotes: number;
   submittedBy?: string;
   submittedByEmail?: string;
   validatedBy?: string;
@@ -27,9 +29,11 @@ const DictionaryEntrySchema = new Schema<IDictionaryEntryDoc>(
     kemetRapprochement: { type: String, trim: true },
     status: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
+      enum: ["pending", "approved", "rejected", "flagged"],
       default: "pending",
     },
+    upvotes: { type: Number, default: 0, min: 0 },
+    downvotes: { type: Number, default: 0, min: 0 },
     submittedBy: { type: String, trim: true },
     submittedByEmail: { type: String, trim: true },
     validatedBy: { type: String, trim: true },

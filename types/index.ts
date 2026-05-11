@@ -89,7 +89,9 @@ export interface DictionaryEntry {
   definition?: string;
   example?: string;
   kemetRapprochement?: string;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "flagged";
+  upvotes: number;
+  downvotes: number;
   submittedBy?: string;
   submittedByEmail?: string;
   validatedBy?: string;

@@ -108,6 +108,170 @@ function PendingDictionaryEntries() {
   );
 }
 
+function FlaggedDictionaryEntries() {
+  const [entries, setEntries] = useState<DictionaryEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<Record<string, { english: string; definition: string }>>({});
+  const [actionStatus, setActionStatus] = useState<Record<string, string>>({});
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/dictionary?status=flagged&limit=50");
+      const json = await res.json();
+      if (json.ok) setEntries(json.data.items);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function startEdit(entry: DictionaryEntry) {
+    setEditing((e) => ({
+      ...e,
+      [entry._id]: { english: entry.english, definition: entry.definition ?? "" },
+    }));
+  }
+
+  async function reapprove(id: string) {
+    const edits = editing[id];
+    setActionStatus((s) => ({ ...s, [id]: "loading" }));
+    try {
+      const res = await fetch("/api/dictionary", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          status: "approved",
+          ...(edits?.english ? { english: edits.english } : {}),
+          ...(edits?.definition !== undefined ? { definition: edits.definition } : {}),
+        }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setEntries((prev) => prev.filter((e) => e._id !== id));
+        setEditing((e) => { const n = { ...e }; delete n[id]; return n; });
+      } else {
+        setActionStatus((s) => ({ ...s, [id]: "error" }));
+      }
+    } catch {
+      setActionStatus((s) => ({ ...s, [id]: "error" }));
+    }
+  }
+
+  async function reject(id: string) {
+    setActionStatus((s) => ({ ...s, [id]: "loading" }));
+    try {
+      const res = await fetch("/api/dictionary", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status: "rejected" }),
+      });
+      const json = await res.json();
+      if (json.ok) setEntries((prev) => prev.filter((e) => e._id !== id));
+      else setActionStatus((s) => ({ ...s, [id]: "error" }));
+    } catch {
+      setActionStatus((s) => ({ ...s, [id]: "error" }));
+    }
+  }
+
+  if (loading) return <p className="text-sm text-gray-400 py-4 text-center">Chargement…</p>;
+  if (entries.length === 0) return <p className="text-sm text-gray-400 py-4 text-center">Aucune entrée signalée. ✓</p>;
+
+  return (
+    <div className="space-y-3">
+      {entries.map((entry) => {
+        const isEditing = Boolean(editing[entry._id]);
+        const ed = editing[entry._id];
+        return (
+          <Card key={entry._id} className="rounded-2xl space-y-2 border-orange-100 bg-orange-50/20">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-gray-900">{entry.soninke}</span>
+                  <span className="text-amber-500 text-sm">→</span>
+                  <span className="font-semibold text-amber-700 text-sm">{entry.english}</span>
+                  {entry.partOfSpeech && (
+                    <Badge tone="muted" className="text-[10px]">{entry.partOfSpeech}</Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 mt-1 text-xs">
+                  <span className="text-green-700 font-semibold">▲ {entry.upvotes ?? 0}</span>
+                  <span className="text-red-600 font-semibold">▼ {entry.downvotes ?? 0}</span>
+                </div>
+                {entry.definition && !isEditing && (
+                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">{entry.definition}</p>
+                )}
+              </div>
+              {!isEditing && (
+                <button
+                  type="button"
+                  onClick={() => startEdit(entry)}
+                  className="text-xs text-amber-600 font-semibold underline flex-shrink-0 hover:text-amber-800"
+                >
+                  Corriger
+                </button>
+              )}
+            </div>
+
+            {/* Inline edit form */}
+            {isEditing && (
+              <div className="space-y-2 border-t border-orange-100 pt-2">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+                    Traduction corrigée
+                  </label>
+                  <input
+                    value={ed.english}
+                    onChange={(e) => setEditing((m) => ({ ...m, [entry._id]: { ...ed, english: e.target.value } }))}
+                    className="w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-amber-400"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+                    Définition corrigée
+                  </label>
+                  <textarea
+                    value={ed.definition}
+                    onChange={(e) => setEditing((m) => ({ ...m, [entry._id]: { ...ed, definition: e.target.value } }))}
+                    rows={2}
+                    className="w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-amber-400 resize-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-1">
+              <Button
+                type="button"
+                className="flex-1 py-2 text-xs bg-green-600 hover:bg-green-700"
+                disabled={actionStatus[entry._id] === "loading"}
+                onClick={() => reapprove(entry._id)}
+              >
+                ✓ {isEditing ? "Corriger & réapprouver" : "Réapprouver"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="flex-1 py-2 text-xs border-red-200 text-red-600 hover:bg-red-50"
+                disabled={actionStatus[entry._id] === "loading"}
+                onClick={() => reject(entry._id)}
+              >
+                ✕ Rejeter
+              </Button>
+            </div>
+            {actionStatus[entry._id] === "error" && (
+              <p className="text-xs text-red-500">Erreur lors de l&apos;action.</p>
+            )}
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
 export function AdminForms() {
   const [status, setStatus] = useState<string>("");
 
@@ -228,7 +392,7 @@ export function AdminForms() {
         </form>
       </Card>
 
-      {/* Dictionary moderation */}
+      {/* Dictionary — pending submissions */}
       <Card className="space-y-4 border-amber-200/60">
         <div>
           <h2 className="font-bold text-gray-900">Dictionnaire — mots en attente</h2>
@@ -237,6 +401,17 @@ export function AdminForms() {
           </p>
         </div>
         <PendingDictionaryEntries />
+      </Card>
+
+      {/* Dictionary — flagged entries */}
+      <Card className="space-y-4 border-orange-200/60">
+        <div>
+          <h2 className="font-bold text-gray-900">🚩 Dictionnaire — entrées signalées</h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Ces définitions ont reçu 10 votes négatifs ou plus. Corrigez et réapprouvez, ou rejetez.
+          </p>
+        </div>
+        <FlaggedDictionaryEntries />
       </Card>
     </div>
   );

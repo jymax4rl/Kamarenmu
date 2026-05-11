@@ -25,8 +25,9 @@ export async function GET(req: NextRequest) {
     }
 
     const { page, limit, skip } = parsePagination(searchParams);
+    // Default public view: approved + flagged (still visible, marked under review)
     const filter: Record<string, unknown> = {
-      status: status || "approved",
+      status: status || { $in: ["approved", "flagged"] },
     };
 
     if (q) {
@@ -100,6 +101,11 @@ export async function PATCH(req: NextRequest) {
     if (status) update.status = status;
     if (kemetRapprochement !== undefined) update.kemetRapprochement = kemetRapprochement;
     if (validatedBy) update.validatedBy = validatedBy;
+    // Reset vote counters when re-approving a flagged entry
+    if (status === "approved") {
+      update.downvotes = 0;
+      update.upvotes = 0;
+    }
 
     const updated = await DictionaryEntry.findByIdAndUpdate(id, update, {
       new: true,
