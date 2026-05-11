@@ -18,34 +18,36 @@ export function NewsCard({
       initial={{ opacity: 0, x: 12 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.06, duration: 0.35 }}
-      className="flex-shrink-0 w-[260px]"
+      className="flex-shrink-0 w-[240px]"
     >
       <Link
         href={`/news/${item.slug}`}
-        className="group block h-full rounded-3xl bg-white shadow-lg shadow-amber-100/50 border border-amber-50 overflow-hidden transition-all duration-200 hover:shadow-xl active:scale-[0.99]"
+        className="group relative block rounded-3xl overflow-hidden aspect-[3/4] shadow-lg shadow-amber-900/20 transition-all duration-300 hover:shadow-2xl hover:-translate-y-0.5 active:scale-[0.99]"
       >
-        <div className="relative aspect-[16/10] w-full">
-          <Image
-            src={item.coverImage}
-            alt=""
-            fill
-            className="object-cover rounded-2xl"
-            sizes="260px"
-          />
-          {item.isBreaking && (
-            <div className="absolute top-2 left-2">
-              <Badge tone="breaking">Breaking</Badge>
-            </div>
-          )}
-          <div className="absolute top-2 right-2">
+        {/* Blurred background image */}
+        <Image
+          src={item.coverImage}
+          alt=""
+          fill
+          className="object-cover scale-110 blur-sm brightness-75 transition-all duration-500 group-hover:blur-0 group-hover:scale-105"
+          sizes="240px"
+        />
+
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+
+        {/* Content */}
+        <div className="absolute inset-0 p-3.5 flex flex-col justify-between">
+          <div className="flex items-start justify-between gap-1">
+            {item.isBreaking && <Badge tone="breaking">Breaking</Badge>}
             <Badge tone="muted">{item.category}</Badge>
           </div>
-        </div>
-        <div className="p-3 space-y-1">
-          <h3 className="font-semibold text-sm text-gray-900 line-clamp-2 group-hover:text-amber-700 transition-colors">
-            {item.title}
-          </h3>
-          <p className="text-xs text-gray-500 line-clamp-2">{item.excerpt}</p>
+          <div className="space-y-1">
+            <h3 className="font-bold text-white text-sm leading-snug line-clamp-3 drop-shadow-md">
+              {item.title}
+            </h3>
+            <p className="text-[11px] text-white/65 line-clamp-2">{item.excerpt}</p>
+          </div>
         </div>
       </Link>
     </motion.div>

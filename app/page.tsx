@@ -1,4 +1,3 @@
-import Link from "next/link";
 import {
   getArticles,
   getCurrentPresident,
@@ -60,16 +59,7 @@ export default async function HomePage() {
         </section>
       )}
 
-      <section className="space-y-3">
-        <div className="flex items-center justify-between px-1">
-          <h2 className="text-lg font-bold text-gray-900">Latest News</h2>
-          <Link
-            href="/news"
-            className="text-sm font-semibold text-amber-600 hover:text-amber-700 transition"
-          >
-            See all
-          </Link>
-        </div>
+      <section>
         {news.length > 0 ? (
           <NewsHorizontalRow items={news} />
         ) : (
@@ -79,16 +69,7 @@ export default async function HomePage() {
         )}
       </section>
 
-      <section className="space-y-3">
-        <div className="flex items-center justify-between px-1">
-          <h2 className="text-lg font-bold text-gray-900">Recent Articles</h2>
-          <Link
-            href="/articles"
-            className="text-sm font-semibold text-amber-600 hover:text-amber-700 transition"
-          >
-            Browse
-          </Link>
-        </div>
+      <section>
         {articles.length > 0 ? (
           <ArticleList articles={articles} />
         ) : (
