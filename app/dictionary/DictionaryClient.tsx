@@ -4,21 +4,81 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { HiOutlineSearch } from "react-icons/hi";
 import { IoClose } from "react-icons/io5";
-import { BsArrowRight, BsHandThumbsUp, BsHandThumbsDown, BsHandThumbsUpFill, BsHandThumbsDownFill } from "react-icons/bs";
+import {
+  BsArrowRight,
+  BsHandThumbsUp,
+  BsHandThumbsDown,
+  BsHandThumbsUpFill,
+  BsHandThumbsDownFill,
+} from "react-icons/bs";
 import type { DictionaryEntry } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input, TextArea } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 
-const POS_OPTIONS = ["noun", "verb", "adjective", "adverb", "phrase", "expression", "other"];
-const STORAGE_KEY = "kama_voter_key";
-const VOTES_STORAGE_KEY = "kama_dict_votes";
+const POS_OPTIONS = [
+  "noun", "verb", "adjective", "adverb", "phrase", "expression", "other",
+];
 
-// Persisted per-entry vote state (stored in localStorage)
+// ─── localStorage helpers ────────────────────────────────────────────────────
+
+const LS_VOTER_KEY = "kama_voter_key";
+const LS_VOTES_KEY = "kama_dict_votes";       // { [entryId]: "up"|"down" }
+const LS_PENDING_KEY = "kama_dict_pending";   // DictionaryEntry[]
+
 type LocalVoteMap = Record<string, "up" | "down">;
 
-// Live vote state managed in memory
+function ls<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try { return JSON.parse(localStorage.getItem(key) ?? "null") ?? fallback; }
+  catch { return fallback; }
+}
+
+function lsSet(key: string, value: unknown) {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* ignore */ }
+}
+
+function getOrCreateVoterKey(): string {
+  if (typeof window === "undefined") return "anon";
+  let k = localStorage.getItem(LS_VOTER_KEY);
+  if (!k) { k = crypto.randomUUID(); localStorage.setItem(LS_VOTER_KEY, k); }
+  return k;
+}
+
+// Pending submissions the current user submitted (survives page reloads)
+function loadPending(): DictionaryEntry[] {
+  return ls<DictionaryEntry[]>(LS_PENDING_KEY, []);
+}
+
+function savePending(entry: DictionaryEntry) {
+  const list = loadPending();
+  if (!list.find((e) => e._id === entry._id)) {
+    lsSet(LS_PENDING_KEY, [entry, ...list]);
+  }
+}
+
+function prunePending(approvedIds: Set<string>) {
+  // Remove entries that have since been approved (they now come from the server)
+  const list = loadPending().filter((e) => !approvedIds.has(e._id));
+  lsSet(LS_PENDING_KEY, list);
+}
+
+// Per-entry vote map (survives page reloads)
+function loadVoteMap(): LocalVoteMap {
+  return ls<LocalVoteMap>(LS_VOTES_KEY, {});
+}
+
+function persistVote(entryId: string, vote: "up" | "down" | null) {
+  const m = loadVoteMap();
+  if (vote === null) delete m[entryId];
+  else m[entryId] = vote;
+  lsSet(LS_VOTES_KEY, m);
+}
+
+// ─── Vote state ──────────────────────────────────────────────────────────────
+
 interface VoteState {
   upvotes: number;
   downvotes: number;
@@ -26,37 +86,24 @@ interface VoteState {
   status: DictionaryEntry["status"];
 }
 
-function getOrCreateVoterKey(): string {
-  try {
-    let key = localStorage.getItem(STORAGE_KEY);
-    if (!key) {
-      key = crypto.randomUUID();
-      localStorage.setItem(STORAGE_KEY, key);
-    }
-    return key;
-  } catch {
-    return "anon";
+function buildVoteMap(
+  entries: DictionaryEntry[],
+  stored: LocalVoteMap
+): Record<string, VoteState> {
+  const m: Record<string, VoteState> = {};
+  for (const e of entries) {
+    m[e._id] = {
+      upvotes: e.upvotes ?? 0,
+      downvotes: e.downvotes ?? 0,
+      userVote: stored[e._id] ?? null,
+      status: e.status,
+    };
   }
-}
-
-function loadLocalVotes(): LocalVoteMap {
-  try {
-    return JSON.parse(localStorage.getItem(VOTES_STORAGE_KEY) || "{}");
-  } catch {
-    return {};
-  }
-}
-
-function saveLocalVote(entryId: string, vote: "up" | "down" | null) {
-  try {
-    const map = loadLocalVotes();
-    if (vote === null) delete map[entryId];
-    else map[entryId] = vote;
-    localStorage.setItem(VOTES_STORAGE_KEY, JSON.stringify(map));
-  } catch { /* ignore */ }
+  return m;
 }
 
 // ─── Vote buttons ────────────────────────────────────────────────────────────
+
 function VoteButtons({
   entryId,
   voteState,
@@ -64,7 +111,7 @@ function VoteButtons({
 }: {
   entryId: string;
   voteState: VoteState;
-  onVote: (entryId: string, dir: "up" | "down") => Promise<void>;
+  onVote: (id: string, dir: "up" | "down") => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
 
@@ -76,7 +123,8 @@ function VoteButtons({
   }
 
   const UpIcon = voteState.userVote === "up" ? BsHandThumbsUpFill : BsHandThumbsUp;
-  const DownIcon = voteState.userVote === "down" ? BsHandThumbsDownFill : BsHandThumbsDown;
+  const DownIcon =
+    voteState.userVote === "down" ? BsHandThumbsDownFill : BsHandThumbsDown;
 
   return (
     <div className="flex items-center gap-2">
@@ -118,11 +166,18 @@ function VoteButtons({
           🚩 révision
         </span>
       )}
+
+      {voteState.status === "pending" && (
+        <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+          en attente
+        </span>
+      )}
     </div>
   );
 }
 
 // ─── Dictionary card ─────────────────────────────────────────────────────────
+
 function DictionaryCard({
   entry,
   voteState,
@@ -130,10 +185,11 @@ function DictionaryCard({
 }: {
   entry: DictionaryEntry;
   voteState: VoteState;
-  onVote: (entryId: string, dir: "up" | "down") => Promise<void>;
+  onVote: (id: string, dir: "up" | "down") => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const hasMore = entry.definition || entry.example || entry.kemetRapprochement;
+  const isPending = entry.status === "pending";
 
   return (
     <motion.div
@@ -145,14 +201,17 @@ function DictionaryCard({
         className={`rounded-2xl overflow-hidden ${
           voteState.status === "flagged"
             ? "border-orange-200/80"
+            : isPending
+            ? "border-amber-200/60 bg-amber-50/30"
             : "border-amber-100/80"
         }`}
       >
-        {/* Header — tappable to expand */}
         <button
           type="button"
           onClick={() => hasMore && setExpanded((v) => !v)}
-          className={`w-full text-left p-4 pb-2 ${hasMore ? "cursor-pointer" : "cursor-default"}`}
+          className={`w-full text-left p-4 pb-2 ${
+            hasMore ? "cursor-pointer" : "cursor-default"
+          }`}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
@@ -186,12 +245,21 @@ function DictionaryCard({
           </div>
         </button>
 
-        {/* Vote bar — always visible */}
+        {/* Vote bar — disabled for pending entries */}
         <div className="px-4 pb-3">
-          <VoteButtons entryId={entry._id} voteState={voteState} onVote={onVote} />
+          {isPending ? (
+            <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+              ⏳ en attente de validation
+            </span>
+          ) : (
+            <VoteButtons
+              entryId={entry._id}
+              voteState={voteState}
+              onVote={onVote}
+            />
+          )}
         </div>
 
-        {/* Expandable detail */}
         <AnimatePresence>
           {expanded && (
             <motion.div
@@ -212,7 +280,6 @@ function DictionaryCard({
                     </p>
                   </div>
                 )}
-
                 {entry.example && (
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
@@ -223,7 +290,6 @@ function DictionaryCard({
                     </p>
                   </div>
                 )}
-
                 <div className="rounded-xl bg-amber-50/60 border border-amber-100 px-3 py-2.5">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700 mb-1">
                     Rapprochement Kemet
@@ -248,6 +314,7 @@ function DictionaryCard({
 }
 
 // ─── Add word bottom sheet ────────────────────────────────────────────────────
+
 function AddWordSheet({
   onClose,
   onSuccess,
@@ -411,72 +478,71 @@ function AddWordSheet({
   );
 }
 
-// ─── Main client component ────────────────────────────────────────────────────
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export function DictionaryClient({
   initialEntries,
 }: {
   initialEntries: DictionaryEntry[];
 }) {
-  const [entries, setEntries] = useState<DictionaryEntry[]>(initialEntries);
+  // Merge server-approved entries with any locally-saved pending submissions.
+  // This runs only on the client (typeof window guard inside ls()).
+  const [entries, setEntries] = useState<DictionaryEntry[]>(() => {
+    const approvedIds = new Set(initialEntries.map((e) => e._id));
+    // Clean up any pending entries that have since been approved server-side
+    prunePending(approvedIds);
+    const pending = loadPending();
+    return [...initialEntries, ...pending];
+  });
+
+  // Initialize vote map directly with localStorage data so there is no flash.
+  const [voteMap, setVoteMap] = useState<Record<string, VoteState>>(() =>
+    buildVoteMap(entries, loadVoteMap())
+  );
+
+  const [voterKey, setVoterKey] = useState("");
   const [query, setQuery] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [voterKey, setVoterKey] = useState("");
 
-  // Map of entryId → live vote state
-  const [voteMap, setVoteMap] = useState<Record<string, VoteState>>(() => {
-    const m: Record<string, VoteState> = {};
-    for (const e of initialEntries) {
-      m[e._id] = {
-        upvotes: e.upvotes ?? 0,
-        downvotes: e.downvotes ?? 0,
-        userVote: null,
-        status: e.status,
-      };
-    }
-    return m;
-  });
-
-  // Hydrate voterKey and restore previously cast votes from localStorage
+  // Hydrate voterKey (client-only — needs window)
   useEffect(() => {
-    const key = getOrCreateVoterKey();
-    setVoterKey(key);
-    const stored = loadLocalVotes();
-    setVoteMap((prev) => {
-      const next = { ...prev };
-      for (const [id, v] of Object.entries(stored)) {
-        if (next[id]) next[id] = { ...next[id], userVote: v };
-      }
-      return next;
-    });
+    setVoterKey(getOrCreateVoterKey());
   }, []);
 
+  // Cast a vote ──────────────────────────────────────────────────────────────
   const castVote = useCallback(
     async (entryId: string, dir: "up" | "down") => {
       if (!voterKey) return;
       const prev = voteMap[entryId];
       if (!prev) return;
 
-      // Optimistic update
       const toggling = prev.userVote === dir;
-      const switching = prev.userVote !== null && prev.userVote !== dir;
+      const switching = prev.userVote !== null && !toggling;
       const next: VoteState = { ...prev };
+
       if (toggling) {
-        // Remove vote
         if (dir === "up") next.upvotes = Math.max(0, prev.upvotes - 1);
         else next.downvotes = Math.max(0, prev.downvotes - 1);
         next.userVote = null;
       } else if (switching) {
-        if (dir === "up") { next.upvotes = prev.upvotes + 1; next.downvotes = Math.max(0, prev.downvotes - 1); }
-        else { next.downvotes = prev.downvotes + 1; next.upvotes = Math.max(0, prev.upvotes - 1); }
+        if (dir === "up") {
+          next.upvotes = prev.upvotes + 1;
+          next.downvotes = Math.max(0, prev.downvotes - 1);
+        } else {
+          next.downvotes = prev.downvotes + 1;
+          next.upvotes = Math.max(0, prev.upvotes - 1);
+        }
         next.userVote = dir;
       } else {
         if (dir === "up") next.upvotes = prev.upvotes + 1;
         else next.downvotes = prev.downvotes + 1;
         next.userVote = dir;
       }
+
+      // Optimistic update
       setVoteMap((m) => ({ ...m, [entryId]: next }));
-      saveLocalVote(entryId, next.userVote);
+      persistVote(entryId, next.userVote);
 
       try {
         const res = await fetch("/api/dictionary/vote", {
@@ -487,27 +553,50 @@ export function DictionaryClient({
         const json = await res.json();
         if (json.ok) {
           // Reconcile with server truth
-          setVoteMap((m) => ({
-            ...m,
-            [entryId]: {
-              upvotes: json.data.upvotes,
-              downvotes: json.data.downvotes,
-              userVote: json.data.userVote,
-              status: json.data.status,
-            },
-          }));
-          saveLocalVote(entryId, json.data.userVote);
+          const confirmed: VoteState = {
+            upvotes: json.data.upvotes,
+            downvotes: json.data.downvotes,
+            userVote: json.data.userVote,
+            status: json.data.status,
+          };
+          setVoteMap((m) => ({ ...m, [entryId]: confirmed }));
+          persistVote(entryId, confirmed.userVote);
         } else {
-          // Revert optimistic update on error
+          // Revert on error
           setVoteMap((m) => ({ ...m, [entryId]: prev }));
+          persistVote(entryId, prev.userVote);
         }
       } catch {
         setVoteMap((m) => ({ ...m, [entryId]: prev }));
+        persistVote(entryId, prev.userVote);
       }
     },
     [voterKey, voteMap]
   );
 
+  // Handle new word submission ──────────────────────────────────────────────
+  function handleAddSuccess(entry: DictionaryEntry) {
+    setShowAdd(false);
+    setSubmitted(true);
+    // Persist to localStorage so it survives page reloads
+    savePending(entry);
+    setEntries((prev) => {
+      if (prev.find((e) => e._id === entry._id)) return prev;
+      return [entry, ...prev];
+    });
+    setVoteMap((m) => ({
+      ...m,
+      [entry._id]: {
+        upvotes: 0,
+        downvotes: 0,
+        userVote: null,
+        status: "pending",
+      },
+    }));
+    setTimeout(() => setSubmitted(false), 6000);
+  }
+
+  // Filtered list ──────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return entries;
@@ -519,24 +608,14 @@ export function DictionaryClient({
     );
   }, [entries, query]);
 
-  function handleAddSuccess(entry: DictionaryEntry) {
-    setShowAdd(false);
-    setSubmitted(true);
-    setEntries((prev) => [entry, ...prev]);
-    setVoteMap((m) => ({
-      ...m,
-      [entry._id]: { upvotes: 0, downvotes: 0, userVote: null, status: entry.status },
-    }));
-    setTimeout(() => setSubmitted(false), 5000);
-  }
-
-  const approvedCount = entries.filter(
+  const visibleCount = entries.filter(
     (e) => e.status === "approved" || e.status === "flagged"
   ).length;
+  const pendingCount = entries.filter((e) => e.status === "pending").length;
 
   return (
     <>
-      {/* Search + Add */}
+      {/* Search + Add ─────────────────────────────────────────────────────── */}
       <div className="flex gap-2 items-center">
         <div className="relative flex-1">
           <HiOutlineSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-lg pointer-events-none" />
@@ -566,7 +645,7 @@ export function DictionaryClient({
         </Button>
       </div>
 
-      {/* Submission toast */}
+      {/* Submission toast ──────────────────────────────────────────────────── */}
       <AnimatePresence>
         {submitted && (
           <motion.div
@@ -575,24 +654,31 @@ export function DictionaryClient({
             exit={{ opacity: 0, y: -8 }}
             className="rounded-2xl bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800"
           >
-            Merci ! Votre mot a été soumis et sera validé par un administrateur.
+            Merci ! Votre mot a été soumis. Il apparaît ci-dessous en attente de validation.
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Count line */}
-      {!query && approvedCount > 0 && (
+      {/* Counts ──────────────────────────────────────────────────────────── */}
+      {!query && (visibleCount > 0 || pendingCount > 0) && (
         <p className="text-xs text-gray-400 px-1">
-          {approvedCount} mot{approvedCount !== 1 ? "s" : ""} dans le dictionnaire
+          {visibleCount > 0
+            ? `${visibleCount} mot${visibleCount !== 1 ? "s" : ""} dans le dictionnaire`
+            : ""}
+          {visibleCount > 0 && pendingCount > 0 ? " · " : ""}
+          {pendingCount > 0
+            ? `${pendingCount} en attente de validation`
+            : ""}
         </p>
       )}
       {query && (
         <p className="text-xs text-gray-400 px-1">
-          {filtered.length} résultat{filtered.length !== 1 ? "s" : ""} pour &ldquo;{query}&rdquo;
+          {filtered.length} résultat{filtered.length !== 1 ? "s" : ""} pour{" "}
+          &ldquo;{query}&rdquo;
         </p>
       )}
 
-      {/* Word list */}
+      {/* Word list ───────────────────────────────────────────────────────── */}
       {filtered.length === 0 ? (
         <div className="text-center py-14 text-gray-400 text-sm space-y-2">
           <p className="text-3xl">📖</p>
@@ -626,12 +712,7 @@ export function DictionaryClient({
         </div>
       )}
 
-      {entries.some((e) => e.status === "pending") && (
-        <p className="text-center text-xs text-amber-600/80 pb-2">
-          Les mots en attente de validation ne sont visibles que par vous temporairement.
-        </p>
-      )}
-
+      {/* Add word sheet ──────────────────────────────────────────────────── */}
       <AnimatePresence>
         {showAdd && (
           <AddWordSheet onClose={() => setShowAdd(false)} onSuccess={handleAddSuccess} />
