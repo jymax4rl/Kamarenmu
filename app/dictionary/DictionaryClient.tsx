@@ -881,31 +881,20 @@ function AddWordSheet({
   const uploadingAudio = uploadStep === "uploading-audio";
   const audioDone      = uploadStep === "audio-done" || uploadStep === "saving-word";
 
-  // Apply suggestions via useEffect so it always runs with fresh state values,
-  // avoiding the stale-closure problem that occurs inside async callbacks.
+  // Apply AI suggestions unconditionally when they arrive.
+  // The fetch is triggered only once (guarded in go()), so there is no
+  // risk of overwriting anything the user already chose.
   useEffect(() => {
-    if (!aiSuggestions || Object.keys(aiSuggestions).length === 0) return;
-    const applied = new Set<string>();
+    const s = aiSuggestions;
+    if (!s || Object.keys(s).length === 0) return;
 
-    if (aiSuggestions.partOfSpeech && !partOfSpeech) {
-      setPartOfSpeech(aiSuggestions.partOfSpeech);
-      applied.add("partOfSpeech");
-    }
-    if (aiSuggestions.wordType && !wordType) {
-      setWordType(aiSuggestions.wordType);
-      applied.add("wordType");
-    }
-    if (aiSuggestions.frequencyLevel && !frequencyLevel) {
-      setFrequencyLevel(aiSuggestions.frequencyLevel);
-      applied.add("frequencyLevel");
-    }
-    if (aiSuggestions.semanticCategories?.length && semanticCategories.length === 0) {
-      setSemanticCategories(aiSuggestions.semanticCategories);
-      applied.add("semanticCategories");
-    }
-    if (applied.size > 0) setAiFields(applied);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aiSuggestions]); // intentionally only re-run when new suggestions arrive
+    const applied = new Set<string>();
+    if (s.partOfSpeech)               { setPartOfSpeech(s.partOfSpeech);          applied.add("partOfSpeech"); }
+    if (s.wordType)                   { setWordType(s.wordType);                  applied.add("wordType"); }
+    if (s.frequencyLevel)             { setFrequencyLevel(s.frequencyLevel);      applied.add("frequencyLevel"); }
+    if (s.semanticCategories?.length) { setSemanticCategories(s.semanticCategories); applied.add("semanticCategories"); }
+    if (applied.size > 0)             { setAiFields(applied); }
+  }, [aiSuggestions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function fetchAiSuggestions() {
     if (!soninke.trim() || (!english.trim() && !french.trim())) return;
