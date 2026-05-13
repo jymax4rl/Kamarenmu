@@ -881,18 +881,31 @@ function AddWordSheet({
   const uploadingAudio = uploadStep === "uploading-audio";
   const audioDone      = uploadStep === "audio-done" || uploadStep === "saving-word";
 
-  function applyAiSuggestions(s: AISuggestion) {
+  // Apply suggestions via useEffect so it always runs with fresh state values,
+  // avoiding the stale-closure problem that occurs inside async callbacks.
+  useEffect(() => {
+    if (!aiSuggestions || Object.keys(aiSuggestions).length === 0) return;
     const applied = new Set<string>();
-    if (s.partOfSpeech      && !partOfSpeech)        { setPartOfSpeech(s.partOfSpeech);           applied.add("partOfSpeech"); }
-    if (s.wordType          && !wordType)             { setWordType(s.wordType);                   applied.add("wordType"); }
-    if (s.frequencyLevel    && !frequencyLevel)       { setFrequencyLevel(s.frequencyLevel);       applied.add("frequencyLevel"); }
-    if (s.semanticCategories?.length && semanticCategories.length === 0) {
-      setSemanticCategories(s.semanticCategories);
+
+    if (aiSuggestions.partOfSpeech && !partOfSpeech) {
+      setPartOfSpeech(aiSuggestions.partOfSpeech);
+      applied.add("partOfSpeech");
+    }
+    if (aiSuggestions.wordType && !wordType) {
+      setWordType(aiSuggestions.wordType);
+      applied.add("wordType");
+    }
+    if (aiSuggestions.frequencyLevel && !frequencyLevel) {
+      setFrequencyLevel(aiSuggestions.frequencyLevel);
+      applied.add("frequencyLevel");
+    }
+    if (aiSuggestions.semanticCategories?.length && semanticCategories.length === 0) {
+      setSemanticCategories(aiSuggestions.semanticCategories);
       applied.add("semanticCategories");
     }
-    setAiFields(applied);
-    setAiSuggestions(s);
-  }
+    if (applied.size > 0) setAiFields(applied);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiSuggestions]); // intentionally only re-run when new suggestions arrive
 
   async function fetchAiSuggestions() {
     if (!soninke.trim() || (!english.trim() && !french.trim())) return;
@@ -905,7 +918,7 @@ function AddWordSheet({
       });
       const json = await res.json();
       if (json.ok && json.data?.suggestions) {
-        applyAiSuggestions(json.data.suggestions as AISuggestion);
+        setAiSuggestions(json.data.suggestions as AISuggestion); // triggers the useEffect above
       }
     } catch { /* silent — AI is non-blocking */ }
     finally { setAiLoading(false); }
