@@ -200,7 +200,8 @@ function matchRefs(
 ): LinguisticReference[] {
   const haystack = [
     entry.soninke,
-    entry.english,
+    entry.english ?? "",
+    entry.french ?? "",
     entry.definition ?? "",
     entry.example ?? "",
   ]
@@ -1035,7 +1036,8 @@ export function DictionaryClient({
     return entries.filter(
       (e) =>
         e.soninke.toLowerCase().includes(q) ||
-        e.english.toLowerCase().includes(q) ||
+        e.english?.toLowerCase().includes(q) ||
+        e.french?.toLowerCase().includes(q) ||
         e.definition?.toLowerCase().includes(q)
     );
   }, [entries, query]);
