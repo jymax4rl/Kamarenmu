@@ -29,7 +29,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#FFFBEB",
+  themeColor: "#ffffff",
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
@@ -43,10 +43,17 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className="font-sans min-h-dvh">
+        {/* Animated background blobs — sit behind all content */}
+        <div aria-hidden="true">
+          <div className="blob blob-blue" />
+          <div className="blob blob-red" />
+          <div className="blob blob-violet" />
+        </div>
+
         <Providers>
           <MobileContainer>
             <Header />
-            <main className="flex-1 pt-14 pb-24 px-4">{children}</main>
+            <main className="relative z-10 flex-1 pt-14 pb-24 px-4">{children}</main>
             <BottomNav />
           </MobileContainer>
         </Providers>

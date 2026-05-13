@@ -322,17 +322,13 @@ function DictionaryCard({
       transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
     >
       <div
-        className={`rounded-3xl overflow-hidden backdrop-blur-xl transition-all duration-200
-          shadow-[0_4px_24px_rgba(0,0,0,0.06),_0_1px_3px_rgba(0,0,0,0.04),_inset_0_1px_0_rgba(255,255,255,0.9)]
-          hover:shadow-[0_8px_32px_rgba(0,0,0,0.10),_0_2px_6px_rgba(0,0,0,0.05),_inset_0_1px_0_rgba(255,255,255,1)]
-          hover:-translate-y-0.5 active:scale-[0.99]
-          ${
-            voteState.status === "flagged"
-              ? "bg-orange-50/70 border border-orange-200/60 ring-1 ring-orange-100/40"
-              : isPending
-              ? "bg-amber-50/60 border border-amber-200/50 ring-1 ring-amber-100/30"
-              : "bg-white/70 border border-white/80 ring-1 ring-black/[0.04]"
-          }`}
+        className={`glass rounded-3xl overflow-hidden transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.99] ${
+          voteState.status === "flagged"
+            ? "!bg-orange-50/50 !border-orange-200/60"
+            : isPending
+            ? "!bg-amber-50/50 !border-amber-200/50"
+            : ""
+        }`}
       >
         <button
           type="button"

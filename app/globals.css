@@ -2,12 +2,94 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Base ─────────────────────────────────────────────────────────────────── */
 body {
-  @apply bg-white text-gray-800 antialiased;
+  background-color: #ffffff;
+  color: #1f2937;
+  -webkit-font-smoothing: antialiased;
   min-height: 100dvh;
 }
 
-/* Prose tweaks for article/news bodies */
+/* ─── Animated background blobs ────────────────────────────────────────────── */
+.blob {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.35;
+  pointer-events: none;
+  will-change: transform;
+  z-index: 0;
+}
+
+.blob-blue {
+  width: 520px;
+  height: 520px;
+  background: radial-gradient(circle, #3b82f6 0%, #1d4ed8 60%, transparent 100%);
+  top: -120px;
+  left: -100px;
+  animation: moveBlob1 18s ease-in-out infinite;
+}
+
+.blob-red {
+  width: 480px;
+  height: 480px;
+  background: radial-gradient(circle, #ef4444 0%, #b91c1c 60%, transparent 100%);
+  bottom: 80px;
+  right: -120px;
+  animation: moveBlob2 22s ease-in-out infinite;
+}
+
+.blob-violet {
+  width: 380px;
+  height: 380px;
+  background: radial-gradient(circle, #8b5cf6 0%, #6d28d9 60%, transparent 100%);
+  top: 40%;
+  left: 30%;
+  animation: moveBlob3 26s ease-in-out infinite;
+}
+
+@keyframes moveBlob1 {
+  0%, 100% { transform: translate(0px,   0px)  scale(1);    }
+  20%       { transform: translate(60px, -80px) scale(1.08); }
+  40%       { transform: translate(-40px,-120px) scale(0.95); }
+  60%       { transform: translate(80px, -40px) scale(1.12); }
+  80%       { transform: translate(20px, -90px) scale(1.04); }
+}
+
+@keyframes moveBlob2 {
+  0%, 100% { transform: translate(0px,   0px)   scale(1);    }
+  25%       { transform: translate(-70px, 60px)  scale(1.1);  }
+  50%       { transform: translate(-120px,-40px) scale(0.92); }
+  75%       { transform: translate(-50px, 90px)  scale(1.06); }
+}
+
+@keyframes moveBlob3 {
+  0%, 100% { transform: translate(0px,   0px)  scale(1);    }
+  33%       { transform: translate(-80px, 70px) scale(1.15); }
+  66%       { transform: translate(60px, -60px) scale(0.9);  }
+}
+
+/* ─── Glassmorphism card ────────────────────────────────────────────────────── */
+.glass {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow:
+    0 4px 24px rgba(59, 130, 246, 0.07),
+    0 1px 4px rgba(0, 0, 0, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.glass:hover {
+  background: rgba(255, 255, 255, 0.70);
+  box-shadow:
+    0 8px 40px rgba(59, 130, 246, 0.12),
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
+/* ─── Prose tweaks ──────────────────────────────────────────────────────────── */
 .prose-soninke {
   @apply prose prose-gray max-w-none prose-headings:text-gray-900 prose-a:text-amber-600;
 }
