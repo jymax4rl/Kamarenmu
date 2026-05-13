@@ -342,17 +342,21 @@ function DictionaryCard({
                   </Badge>
                 )}
               </div>
-              {/* Translations */}
+              {/* Translations — show whichever fields are present */}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5">
-                <span className="flex items-center gap-1.5">
-                  <BsArrowRight className="text-amber-500 flex-shrink-0 text-sm" />
-                  <span className="text-sm font-semibold text-amber-700">
-                    {entry.english}
+                {entry.english && (
+                  <span className="flex items-center gap-1.5">
+                    <BsArrowRight className="text-amber-500 flex-shrink-0 text-sm" />
+                    <span className="text-sm font-semibold text-amber-700">
+                      {entry.english}
+                    </span>
                   </span>
-                </span>
+                )}
                 {entry.french && (
                   <span className="flex items-center gap-1.5">
-                    <span className="text-gray-300 text-xs">·</span>
+                    {!entry.english && (
+                      <BsArrowRight className="text-blue-400 flex-shrink-0 text-sm" />
+                    )}
                     <span className="text-sm font-semibold text-blue-600">
                       {entry.french}
                     </span>
@@ -584,18 +588,22 @@ function AddWordSheet({
   onSuccess: (entry: DictionaryEntry) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [busyLabel, setBusyLabel] = useState("");
   const [error, setError] = useState("");
+  const [audioWarning, setAudioWarning] = useState("");
   const audioBlobRef = useRef<Blob | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
+    setAudioWarning("");
     setBusy(true);
     const fd = new FormData(e.currentTarget);
 
     // Upload audio first (if recorded)
     let audioUrl: string | undefined;
     if (audioBlobRef.current) {
+      setBusyLabel("Envoi de la note vocale…");
       try {
         const res = await fetch("/api/upload-audio", {
           method: "POST",
@@ -603,15 +611,20 @@ function AddWordSheet({
           body: audioBlobRef.current,
         });
         const json = await res.json();
-        if (json.ok) audioUrl = json.data.url;
+        if (json.ok) {
+          audioUrl = json.data.url;
+        } else {
+          setAudioWarning(`Note vocale non sauvegardée : ${json.error || "erreur serveur"}`);
+        }
       } catch {
-        // non-fatal — submit without audio
+        setAudioWarning("Note vocale non sauvegardée : erreur réseau.");
       }
     }
+    setBusyLabel("Envoi du mot…");
 
     const payload = {
       soninke: String(fd.get("soninke") || "").trim(),
-      english: String(fd.get("english") || "").trim(),
+      english: String(fd.get("english") || "").trim() || undefined,
       french: String(fd.get("french") || "").trim() || undefined,
       phonetic: String(fd.get("phonetic") || "").trim() || undefined,
       partOfSpeech: String(fd.get("partOfSpeech") || "").trim() || undefined,
@@ -620,8 +633,13 @@ function AddWordSheet({
       submittedBy: String(fd.get("submittedBy") || "").trim() || undefined,
       audioUrl,
     };
-    if (!payload.soninke || !payload.english) {
-      setError("Le mot Soninké et la traduction anglaise sont requis.");
+    if (!payload.soninke) {
+      setError("Le mot Soninké est requis.");
+      setBusy(false);
+      return;
+    }
+    if (!payload.english && !payload.french) {
+      setError("Au moins une traduction (anglais ou français) est requise.");
       setBusy(false);
       return;
     }
@@ -638,6 +656,7 @@ function AddWordSheet({
       setError(err instanceof Error ? err.message : "Erreur lors de l'envoi.");
     } finally {
       setBusy(false);
+      setBusyLabel("");
     }
   }
 
@@ -692,6 +711,11 @@ function AddWordSheet({
               {error}
             </p>
           )}
+          {audioWarning && (
+            <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2">
+              ⚠️ {audioWarning}
+            </p>
+          )}
           {/* Soninke word */}
           <div className="space-y-1">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -704,9 +728,9 @@ function AddWordSheet({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Anglais <span className="text-red-400">*</span>
+                Anglais
               </label>
-              <Input name="english" placeholder="ex: cow" required />
+              <Input name="english" placeholder="ex: cow" />
             </div>
             <div className="space-y-1">
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -715,6 +739,10 @@ function AddWordSheet({
               <Input name="french" placeholder="ex: vache" />
             </div>
           </div>
+
+          <p className="text-[11px] text-gray-400 -mt-1">
+            Au moins une traduction est requise.
+          </p>
 
           {/* Phonetic + POS */}
           <div className="grid grid-cols-2 gap-3">
@@ -765,7 +793,7 @@ function AddWordSheet({
             <Input name="submittedBy" placeholder="ex: Moussa Kouyaté" />
           </div>
           <Button type="submit" className="w-full mt-2" disabled={busy}>
-            {busy ? "Envoi…" : "Soumettre le mot"}
+            {busy ? (busyLabel || "Envoi…") : "Soumettre le mot"}
           </Button>
         </form>
       </motion.div>

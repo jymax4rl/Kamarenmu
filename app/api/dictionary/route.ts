@@ -64,8 +64,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { soninke, english, phonetic, partOfSpeech, definition, example, submittedBy, submittedByEmail } = body;
 
-    if (!soninke?.trim() || !english?.trim()) {
-      return jsonError("soninke and english fields are required", 400);
+    if (!soninke?.trim()) {
+      return jsonError("soninke field is required", 400);
+    }
+    if (!english?.trim() && !body.french?.trim()) {
+      return jsonError("At least one translation (english or french) is required", 400);
     }
 
     const created = await DictionaryEntry.create({

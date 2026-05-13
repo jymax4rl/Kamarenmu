@@ -23,7 +23,7 @@ export interface IDictionaryEntryDoc extends IDictionaryEntry, Document {}
 const DictionaryEntrySchema = new Schema<IDictionaryEntryDoc>(
   {
     soninke: { type: String, required: true, trim: true },
-    english: { type: String, required: true, trim: true },
+    english: { type: String, trim: true },
     french: { type: String, trim: true },
     audioUrl: { type: String, trim: true },
     phonetic: { type: String, trim: true },
