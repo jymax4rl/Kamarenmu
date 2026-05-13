@@ -97,6 +97,8 @@ export interface DictionaryEntry {
   _id: string;
   soninke: string;
   english: string;
+  french?: string;
+  audioUrl?: string;
   phonetic?: string;
   partOfSpeech?: string;
   definition?: string;

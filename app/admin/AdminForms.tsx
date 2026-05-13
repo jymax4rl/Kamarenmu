@@ -189,8 +189,15 @@ function PendingDictionaryEntries() {
                 <span className="font-bold text-gray-900">{entry.soninke}</span>
                 <span className="text-amber-500 text-sm">→</span>
                 <span className="font-semibold text-amber-700 text-sm">{entry.english}</span>
+                {entry.french && (
+                  <span className="text-blue-600 text-sm font-semibold">/ {entry.french}</span>
+                )}
                 {entry.partOfSpeech && (
                   <Badge tone="muted" className="text-[10px]">{entry.partOfSpeech}</Badge>
+                )}
+                {entry.audioUrl && (
+                  <a href={entry.audioUrl} target="_blank" rel="noopener noreferrer"
+                     className="text-[10px] text-amber-600 underline">🔊 audio</a>
                 )}
               </div>
               {entry.definition && (

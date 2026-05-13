@@ -3,6 +3,8 @@ import mongoose, { Schema, type Document, type Model } from "mongoose";
 export interface IDictionaryEntry {
   soninke: string;
   english: string;
+  french?: string;
+  audioUrl?: string;
   phonetic?: string;
   partOfSpeech?: string;
   definition?: string;
@@ -22,6 +24,8 @@ const DictionaryEntrySchema = new Schema<IDictionaryEntryDoc>(
   {
     soninke: { type: String, required: true, trim: true },
     english: { type: String, required: true, trim: true },
+    french: { type: String, trim: true },
+    audioUrl: { type: String, trim: true },
     phonetic: { type: String, trim: true },
     partOfSpeech: { type: String, trim: true },
     definition: { type: String, trim: true },

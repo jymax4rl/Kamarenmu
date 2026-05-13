@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { HiOutlineSearch } from "react-icons/hi";
 import { IoClose } from "react-icons/io5";
@@ -10,6 +10,11 @@ import {
   BsHandThumbsDown,
   BsHandThumbsUpFill,
   BsHandThumbsDownFill,
+  BsMicFill,
+  BsStopFill,
+  BsPlayFill,
+  BsArrowClockwise,
+  BsVolumeUpFill,
 } from "react-icons/bs";
 import type { DictionaryEntry, LinguisticReference } from "@/types";
 import { Badge } from "@/components/ui/Badge";
@@ -237,6 +242,49 @@ function LinguisticRefPanel({ refs }: { refs: LinguisticReference[] }) {
   );
 }
 
+// ─── Audio play button ────────────────────────────────────────────────────────
+
+function AudioButton({ url }: { url: string }) {
+  const [playing, setPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  function toggle(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!audioRef.current) {
+      audioRef.current = new Audio(url);
+      audioRef.current.onended = () => setPlaying(false);
+    }
+    if (playing) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setPlaying(false);
+    } else {
+      audioRef.current.play();
+      setPlaying(true);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      className={`flex items-center justify-center h-7 w-7 rounded-full transition active:scale-90 ${
+        playing
+          ? "bg-amber-600 text-white"
+          : "bg-amber-100 text-amber-700 hover:bg-amber-200"
+      }`}
+      aria-label={playing ? "Arrêter" : "Écouter la prononciation"}
+      title={playing ? "Arrêter" : "Écouter la prononciation"}
+    >
+      {playing ? (
+        <BsStopFill className="text-xs" />
+      ) : (
+        <BsVolumeUpFill className="text-sm" />
+      )}
+    </button>
+  );
+}
+
 // ─── Dictionary card ─────────────────────────────────────────────────────────
 
 function DictionaryCard({
@@ -294,18 +342,35 @@ function DictionaryCard({
                   </Badge>
                 )}
               </div>
-              <div className="flex items-center gap-1.5 mt-1.5">
-                <BsArrowRight className="text-amber-500 flex-shrink-0 text-sm" />
-                <span className="text-sm font-semibold text-amber-700">
-                  {entry.english}
+              {/* Translations */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5">
+                <span className="flex items-center gap-1.5">
+                  <BsArrowRight className="text-amber-500 flex-shrink-0 text-sm" />
+                  <span className="text-sm font-semibold text-amber-700">
+                    {entry.english}
+                  </span>
                 </span>
+                {entry.french && (
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-gray-300 text-xs">·</span>
+                    <span className="text-sm font-semibold text-blue-600">
+                      {entry.french}
+                    </span>
+                    <span className="text-[9px] font-bold text-blue-400 uppercase tracking-wider">fr</span>
+                  </span>
+                )}
               </div>
             </div>
-            {hasMore && (
-              <span className="text-xs text-gray-400 mt-1 flex-shrink-0 select-none">
-                {expanded ? "moins" : "plus"}
-              </span>
-            )}
+            <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
+              {entry.audioUrl && (
+                <AudioButton url={entry.audioUrl} />
+              )}
+              {hasMore && (
+                <span className="text-xs text-gray-400 select-none">
+                  {expanded ? "moins" : "plus"}
+                </span>
+              )}
+            </div>
           </div>
         </button>
 
@@ -379,6 +444,136 @@ function DictionaryCard({
   );
 }
 
+// ─── Voice recorder ──────────────────────────────────────────────────────────
+
+type RecordState = "idle" | "recording" | "recorded";
+
+function VoiceRecorder({
+  onBlob,
+}: {
+  onBlob: (blob: Blob | null) => void;
+}) {
+  const [state, setState] = useState<RecordState>("idle");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  function clearTimer() {
+    if (timerRef.current) clearInterval(timerRef.current);
+  }
+
+  async function start() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      chunksRef.current = [];
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : MediaRecorder.isTypeSupported("audio/mp4")
+        ? "audio/mp4"
+        : "";
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, {
+          type: mimeType || "audio/webm",
+        });
+        const url = URL.createObjectURL(blob);
+        setPreviewUrl(url);
+        onBlob(blob);
+        stream.getTracks().forEach((t) => t.stop());
+      };
+      recorder.start(100);
+      recorderRef.current = recorder;
+      setElapsed(0);
+      timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
+      setState("recording");
+    } catch {
+      alert("Impossible d'accéder au microphone. Vérifiez les permissions.");
+    }
+  }
+
+  function stop() {
+    clearTimer();
+    recorderRef.current?.stop();
+    setState("recorded");
+  }
+
+  function reset() {
+    clearTimer();
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setElapsed(0);
+    recorderRef.current = null;
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    onBlob(null);
+    setState("idle");
+  }
+
+  useEffect(() => () => { clearTimer(); if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
+
+  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+  return (
+    <div className="rounded-2xl border border-amber-100 bg-amber-50/40 p-3 space-y-2">
+      <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+        Note vocale (optionnel)
+      </p>
+
+      {state === "idle" && (
+        <button
+          type="button"
+          onClick={start}
+          className="flex items-center gap-2 rounded-xl bg-amber-600 text-white px-4 py-2.5 text-sm font-semibold hover:bg-amber-700 active:scale-95 transition"
+        >
+          <BsMicFill />
+          Enregistrer la prononciation
+        </button>
+      )}
+
+      {state === "recording" && (
+        <div className="flex items-center gap-3">
+          <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
+          <span className="text-sm font-semibold text-red-600 tabular-nums">
+            {fmt(elapsed)}
+          </span>
+          <button
+            type="button"
+            onClick={stop}
+            className="flex items-center gap-2 rounded-xl bg-red-600 text-white px-4 py-2 text-sm font-semibold hover:bg-red-700 active:scale-95 transition"
+          >
+            <BsStopFill />
+            Arrêter
+          </button>
+        </div>
+      )}
+
+      {state === "recorded" && previewUrl && (
+        <div className="space-y-2">
+          <audio
+            src={previewUrl}
+            controls
+            className="w-full h-10 rounded-xl"
+          />
+          <button
+            type="button"
+            onClick={reset}
+            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-500 transition"
+          >
+            <BsArrowClockwise />
+            Recommencer
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Add word bottom sheet ────────────────────────────────────────────────────
 
 function AddWordSheet({
@@ -390,20 +585,40 @@ function AddWordSheet({
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const audioBlobRef = useRef<Blob | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     setBusy(true);
     const fd = new FormData(e.currentTarget);
+
+    // Upload audio first (if recorded)
+    let audioUrl: string | undefined;
+    if (audioBlobRef.current) {
+      try {
+        const res = await fetch("/api/upload-audio", {
+          method: "POST",
+          headers: { "Content-Type": audioBlobRef.current.type || "audio/webm" },
+          body: audioBlobRef.current,
+        });
+        const json = await res.json();
+        if (json.ok) audioUrl = json.data.url;
+      } catch {
+        // non-fatal — submit without audio
+      }
+    }
+
     const payload = {
       soninke: String(fd.get("soninke") || "").trim(),
       english: String(fd.get("english") || "").trim(),
+      french: String(fd.get("french") || "").trim() || undefined,
       phonetic: String(fd.get("phonetic") || "").trim() || undefined,
       partOfSpeech: String(fd.get("partOfSpeech") || "").trim() || undefined,
       definition: String(fd.get("definition") || "").trim() || undefined,
       example: String(fd.get("example") || "").trim() || undefined,
       submittedBy: String(fd.get("submittedBy") || "").trim() || undefined,
+      audioUrl,
     };
     if (!payload.soninke || !payload.english) {
       setError("Le mot Soninké et la traduction anglaise sont requis.");
@@ -477,20 +692,31 @@ function AddWordSheet({
               {error}
             </p>
           )}
+          {/* Soninke word */}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              Mot Soninké <span className="text-red-400">*</span>
+            </label>
+            <Input name="soninke" placeholder="ex: naaxu" required />
+          </div>
+
+          {/* Translations row */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Soninké <span className="text-red-400">*</span>
-              </label>
-              <Input name="soninke" placeholder="ex: naaxu" required />
-            </div>
             <div className="space-y-1">
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 Anglais <span className="text-red-400">*</span>
               </label>
               <Input name="english" placeholder="ex: cow" required />
             </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                Français
+              </label>
+              <Input name="french" placeholder="ex: vache" />
+            </div>
           </div>
+
+          {/* Phonetic + POS */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -513,6 +739,9 @@ function AddWordSheet({
               </select>
             </div>
           </div>
+
+          {/* Voice recorder */}
+          <VoiceRecorder onBlob={(b) => { audioBlobRef.current = b; }} />
           <div className="space-y-1">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
               Définition (optionnel)
