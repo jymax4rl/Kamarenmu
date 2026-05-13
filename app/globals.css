@@ -14,35 +14,35 @@ body {
 .blob {
   position: fixed;
   border-radius: 50%;
-  filter: blur(90px);
-  opacity: 0.35;
+  filter: blur(120px);
+  opacity: 0.14;
   pointer-events: none;
   will-change: transform;
   z-index: 0;
 }
 
 .blob-blue {
-  width: 520px;
-  height: 520px;
-  background: radial-gradient(circle, #3b82f6 0%, #1d4ed8 60%, transparent 100%);
-  top: -120px;
-  left: -100px;
+  width: 580px;
+  height: 580px;
+  background: radial-gradient(circle, #93c5fd 0%, #3b82f6 60%, transparent 100%);
+  top: -140px;
+  left: -120px;
   animation: moveBlob1 18s ease-in-out infinite;
 }
 
 .blob-red {
-  width: 480px;
-  height: 480px;
-  background: radial-gradient(circle, #ef4444 0%, #b91c1c 60%, transparent 100%);
-  bottom: 80px;
-  right: -120px;
+  width: 520px;
+  height: 520px;
+  background: radial-gradient(circle, #fca5a5 0%, #ef4444 60%, transparent 100%);
+  bottom: 60px;
+  right: -140px;
   animation: moveBlob2 22s ease-in-out infinite;
 }
 
 .blob-violet {
-  width: 380px;
-  height: 380px;
-  background: radial-gradient(circle, #8b5cf6 0%, #6d28d9 60%, transparent 100%);
+  width: 420px;
+  height: 420px;
+  background: radial-gradient(circle, #c4b5fd 0%, #8b5cf6 60%, transparent 100%);
   top: 40%;
   left: 30%;
   animation: moveBlob3 26s ease-in-out infinite;
