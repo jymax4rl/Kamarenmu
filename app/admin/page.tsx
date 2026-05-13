@@ -12,11 +12,17 @@ export default async function AdminPage() {
 
   const bootstrapEmail = process.env.ADMIN_EMAIL?.trim();
   const isBootstrap = Boolean(bootstrapEmail && session.user.email === bootstrapEmail);
-  const isAdmin = session.user.role === "admin" || isBootstrap;
+  const isPrivileged =
+    session.user.role === "admin" ||
+    session.user.role === "president" ||
+    isBootstrap;
 
-  if (!isAdmin) {
+  if (!isPrivileged) {
     redirect("/");
   }
 
-  return <AdminForms />;
+  // Only the super-admin (ADMIN_EMAIL) and the president can add/manage team members
+  const isTeamManager = isBootstrap || session.user.role === "president";
+
+  return <AdminForms isTeamManager={isTeamManager} />;
 }

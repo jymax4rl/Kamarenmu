@@ -28,6 +28,25 @@ export function parsePagination(searchParams: URLSearchParams) {
  * Bootstrap override: ADMIN_EMAIL env var always grants admin access
  * so the first admin can set themselves without a DB round-trip.
  */
+/**
+ * Stricter guard — only the bootstrap super-admin (ADMIN_EMAIL) or a user
+ * with role "president" may manage team members (administrators, presidents).
+ * Regular admins are blocked.
+ */
+export async function requireTeamManager(): Promise<NextResponse | null> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) {
+    return jsonError("Unauthorized", 401);
+  }
+  const bootstrapEmail = process.env.ADMIN_EMAIL?.trim();
+  const isBootstrap = Boolean(bootstrapEmail && session.user.email === bootstrapEmail);
+  const isPresident = session.user.role === "president";
+  if (!isBootstrap && !isPresident) {
+    return jsonError("Forbidden — seul le président ou le super-admin peut gérer l'équipe", 403);
+  }
+  return null;
+}
+
 export async function requireAdmin(): Promise<NextResponse | null> {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {

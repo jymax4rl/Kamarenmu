@@ -633,7 +633,7 @@ function PresidentForm({ onDone }: { onDone: (msg: string) => void }) {
 
 // ─── Main admin form ──────────────────────────────────────────────────────────
 
-export function AdminForms() {
+export function AdminForms({ isTeamManager = false }: { isTeamManager?: boolean }) {
   const [status, setStatus] = useState<string>("");
 
   async function submitArticle(e: React.FormEvent<HTMLFormElement>) {
@@ -765,26 +765,36 @@ export function AdminForms() {
         <UsersPanel />
       </Card>
 
-      {/* Team management */}
-      <Card className="space-y-4 border-blue-100/80">
-        <div>
-          <h2 className="font-bold text-gray-900">Équipe — ajouter un administrateur</h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Apparaît sur la page About une fois ajouté.
-          </p>
-        </div>
-        <AdministratorForm onDone={(msg) => setStatus(msg)} />
-      </Card>
+      {/* Team management — super-admin and president only */}
+      {isTeamManager ? (
+        <>
+          <Card className="space-y-4 border-blue-100/80">
+            <div>
+              <h2 className="font-bold text-gray-900">Équipe — ajouter un administrateur</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Apparaît sur la page About une fois ajouté.
+              </p>
+            </div>
+            <AdministratorForm onDone={(msg) => setStatus(msg)} />
+          </Card>
 
-      <Card className="space-y-4 border-purple-100/80">
-        <div>
-          <h2 className="font-bold text-gray-900">Présidence — ajouter / mettre à jour</h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Cochez &quot;Président actuel&quot; pour l&apos;afficher sur l&apos;accueil et About.
+          <Card className="space-y-4 border-purple-100/80">
+            <div>
+              <h2 className="font-bold text-gray-900">Présidence — ajouter / mettre à jour</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Cochez &quot;Président actuel&quot; pour l&apos;afficher sur l&apos;accueil et About.
+              </p>
+            </div>
+            <PresidentForm onDone={(msg) => setStatus(msg)} />
+          </Card>
+        </>
+      ) : (
+        <Card className="border-gray-100 bg-gray-50/60 py-4 px-5">
+          <p className="text-sm text-gray-400 text-center">
+            La gestion de l&apos;équipe (administrateurs &amp; présidence) est réservée au président et au super-admin.
           </p>
-        </div>
-        <PresidentForm onDone={(msg) => setStatus(msg)} />
-      </Card>
+        </Card>
+      )}
 
       {/* Dictionary — pending submissions */}
       <Card className="space-y-4 border-amber-200/60">

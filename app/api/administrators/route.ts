@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { Administrator } from "@/models/Administrator";
-import { jsonError, jsonOk, parsePagination, requireAdmin } from "@/lib/api-handlers";
+import { jsonError, jsonOk, parsePagination, requireTeamManager } from "@/lib/api-handlers";
 import { toPlain } from "@/lib/serialize";
 
 export async function GET(req: NextRequest) {
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authError = await requireAdmin();
+  const authError = await requireTeamManager();
   if (authError) return authError;
   try {
     await connectDB();
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const authError = await requireAdmin();
+  const authError = await requireTeamManager();
   if (authError) return authError;
   try {
     await connectDB();
@@ -76,7 +76,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const authError = await requireAdmin();
+  const authError = await requireTeamManager();
   if (authError) return authError;
   try {
     await connectDB();
