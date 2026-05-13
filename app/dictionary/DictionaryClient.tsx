@@ -769,7 +769,51 @@ function VoiceRecorder({
   );
 }
 
-// ─── Add word bottom sheet ────────────────────────────────────────────────────
+// ─── Chip selector (single-select pill grid) ─────────────────────────────────
+
+function ChipSelector({
+  options,
+  value,
+  onChange,
+  cols = 3,
+}: {
+  options: readonly string[];
+  value: string;
+  onChange: (v: string) => void;
+  cols?: 2 | 3 | 4;
+}) {
+  const grid = { 2: "grid-cols-2", 3: "grid-cols-3", 4: "grid-cols-4" }[cols];
+  return (
+    <div className={`grid ${grid} gap-2`}>
+      {options.map((o) => (
+        <button
+          key={o}
+          type="button"
+          onClick={() => onChange(value === o ? "" : o)}
+          className={`rounded-2xl py-2.5 px-2 text-xs font-semibold text-center transition-all active:scale-95 ${
+            value === o
+              ? "bg-amber-500 text-white shadow-md shadow-amber-200"
+              : "bg-white/60 text-gray-600 border border-gray-200/80 hover:border-amber-300 hover:text-amber-700"
+          }`}
+        >
+          {labelOf(o)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Add word stepper sheet ───────────────────────────────────────────────────
+
+const STEPS = [
+  { id: "word",       label: "Mot"           },
+  { id: "grammar",    label: "Grammaire"     },
+  { id: "type",       label: "Type"          },
+  { id: "semantic",   label: "Sémantique"    },
+  { id: "content",    label: "Contenu"       },
+  { id: "audio",      label: "Prononciation" },
+  { id: "submit",     label: "Soumettre"     },
+] as const;
 
 function AddWordSheet({
   onClose,
@@ -778,26 +822,55 @@ function AddWordSheet({
   onClose: () => void;
   onSuccess: (entry: DictionaryEntry) => void;
 }) {
+  // Step navigation
+  const [slide, setSlide] = useState(0);
+  const [dir, setDir] = useState(1); // 1=forward, -1=back
+
+  // Upload/submit state
   const [busy, setBusy] = useState(false);
-  const [step, setStep] = useState<"idle" | "uploading-audio" | "audio-done" | "saving-word">("idle");
+  const [uploadStep, setUploadStep] = useState<"idle"|"uploading-audio"|"audio-done"|"saving-word">("idle");
   const [error, setError] = useState("");
   const [audioWarning, setAudioWarning] = useState("");
+
+  // Controlled form values (needed for sticky header live preview)
+  const [soninke, setSoninke]       = useState("");
+  const [english, setEnglish]       = useState("");
+  const [french, setFrench]         = useState("");
+  const [phonetic, setPhonetic]     = useState("");
+  const [partOfSpeech, setPartOfSpeech] = useState("");
+  const [wordType, setWordType]     = useState("");
+  const [dialect, setDialect]       = useState("");
   const [semanticCategories, setSemanticCategories] = useState<string[]>([]);
+  const [definition, setDefinition] = useState("");
+  const [example, setExample]       = useState("");
+  const [submittedBy, setSubmittedBy] = useState("");
   const audioBlobRef = useRef<Blob | null>(null);
 
-  const uploadingAudio = step === "uploading-audio";
-  const audioDone = step === "audio-done" || step === "saving-word";
+  const uploadingAudio = uploadStep === "uploading-audio";
+  const audioDone      = uploadStep === "audio-done" || uploadStep === "saving-word";
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  function go(next: number) {
+    setDir(next > slide ? 1 : -1);
+    setSlide(next);
+    setError("");
+  }
+
+  function canNext(): string | null {
+    if (slide === 0) {
+      if (!soninke.trim()) return "Le mot Soninké est requis.";
+      if (!english.trim() && !french.trim()) return "Au moins une traduction (anglais ou français) est requise.";
+    }
+    return null;
+  }
+
+  async function handleSubmit() {
     setError("");
     setAudioWarning("");
     setBusy(true);
-    const fd = new FormData(e.currentTarget);
 
     let audioUrl: string | undefined;
     if (audioBlobRef.current) {
-      setStep("uploading-audio");
+      setUploadStep("uploading-audio");
       try {
         const res = await fetch("/api/upload-audio", {
           method: "POST",
@@ -807,50 +880,35 @@ function AddWordSheet({
         const json = await res.json();
         if (json.ok) {
           audioUrl = json.data.url;
-          setStep("audio-done");
+          setUploadStep("audio-done");
           await new Promise((r) => setTimeout(r, 600));
         } else {
           setAudioWarning(`Note vocale non sauvegardée : ${json.error || "erreur serveur"}`);
-          setStep("idle");
         }
       } catch {
         setAudioWarning("Note vocale non sauvegardée : erreur réseau.");
-        setStep("idle");
       }
     }
-    setStep("saving-word");
+    setUploadStep("saving-word");
 
-    const payload = {
-      soninke: String(fd.get("soninke") || "").trim(),
-      english: String(fd.get("english") || "").trim() || undefined,
-      french: String(fd.get("french") || "").trim() || undefined,
-      phonetic: String(fd.get("phonetic") || "").trim() || undefined,
-      partOfSpeech: String(fd.get("partOfSpeech") || "").trim() || undefined,
-      wordType: String(fd.get("wordType") || "").trim() || undefined,
-      dialect: String(fd.get("dialect") || "").trim() || undefined,
-      semanticCategories: semanticCategories.length > 0 ? semanticCategories : undefined,
-      definition: String(fd.get("definition") || "").trim() || undefined,
-      example: String(fd.get("example") || "").trim() || undefined,
-      submittedBy: String(fd.get("submittedBy") || "").trim() || undefined,
-      audioUrl,
-    };
-    if (!payload.soninke) {
-      setError("Le mot Soninké est requis.");
-      setBusy(false);
-      setStep("idle");
-      return;
-    }
-    if (!payload.english && !payload.french) {
-      setError("Au moins une traduction (anglais ou français) est requise.");
-      setBusy(false);
-      setStep("idle");
-      return;
-    }
     try {
       const res = await fetch("/api/dictionary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          soninke: soninke.trim(),
+          english: english.trim() || undefined,
+          french: french.trim() || undefined,
+          phonetic: phonetic.trim() || undefined,
+          partOfSpeech: partOfSpeech || undefined,
+          wordType: wordType || undefined,
+          dialect: dialect || undefined,
+          semanticCategories: semanticCategories.length > 0 ? semanticCategories : undefined,
+          definition: definition.trim() || undefined,
+          example: example.trim() || undefined,
+          submittedBy: submittedBy.trim() || undefined,
+          audioUrl,
+        }),
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error || "Erreur");
@@ -859,9 +917,22 @@ function AddWordSheet({
       setError(err instanceof Error ? err.message : "Erreur lors de l'envoi.");
     } finally {
       setBusy(false);
-      setStep("idle");
+      setUploadStep("idle");
     }
   }
+
+  const slideVariants = {
+    enter: (d: number) => ({ x: d > 0 ? "100%" : "-100%", opacity: 0 }),
+    center: { x: 0, opacity: 1 },
+    exit: (d: number) => ({ x: d < 0 ? "100%" : "-100%", opacity: 0 }),
+  };
+
+  // ── Sticky header meta tags ───────────────────────────────────────────────
+  const metaTags = [
+    partOfSpeech && labelOf(partOfSpeech),
+    semanticCategories[0] && labelOf(semanticCategories[0]),
+    dialect && dialect !== "UNKNOWN" && dialect,
+  ].filter(Boolean) as string[];
 
   return (
     <motion.div
@@ -871,202 +942,306 @@ function AddWordSheet({
       transition={{ duration: 0.18 }}
       className="fixed inset-0 z-[70] flex items-end justify-center"
     >
+      {/* Backdrop */}
       <motion.button
         type="button"
-        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-black/50 backdrop-blur-[3px]"
         onClick={onClose}
         aria-label="Fermer"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
       />
+
       <motion.div
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
-        transition={{ type: "spring", damping: 30, stiffness: 340 }}
-        className="relative w-full max-w-md bg-white rounded-t-3xl shadow-2xl max-h-[90dvh] flex flex-col"
+        transition={{ type: "spring", damping: 32, stiffness: 360 }}
+        className="relative w-full max-w-md bg-white rounded-t-[2rem] shadow-2xl h-[92dvh] flex flex-col overflow-hidden"
       >
-        <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+        {/* ── Drag handle ────────────────────────────────────────────────── */}
+        <div className="flex justify-center pt-3 pb-0 flex-shrink-0">
           <div className="w-10 h-1 rounded-full bg-gray-200" />
         </div>
-        <div className="flex items-center justify-between px-5 pb-2 flex-shrink-0">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900">Proposer un mot</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Validé par un administrateur avant publication.</p>
+
+        {/* ── Step progress dots ──────────────────────────────────────────── */}
+        <div className="flex items-center justify-between px-5 pt-2 pb-1 flex-shrink-0">
+          <div className="flex items-center gap-1.5">
+            {STEPS.map((_, i) => (
+              <div
+                key={i}
+                className={`rounded-full transition-all duration-300 ${
+                  i === slide
+                    ? "w-5 h-2 bg-amber-500"
+                    : i < slide
+                    ? "w-2 h-2 bg-amber-300"
+                    : "w-2 h-2 bg-gray-200"
+                }`}
+              />
+            ))}
           </div>
-          <button type="button" onClick={onClose} className="rounded-full p-2 hover:bg-gray-100 transition">
-            <IoClose className="text-xl text-gray-500" />
+          <button type="button" onClick={onClose} className="rounded-full p-1.5 hover:bg-gray-100 transition">
+            <IoClose className="text-lg text-gray-400" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 px-5 pb-8 space-y-4">
-          {error && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{error}</p>
-          )}
-          {audioWarning && (
-            <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2">⚠️ {audioWarning}</p>
-          )}
-
-          {/* ── SECTION 1: Traductions ─────────────────────────────────── */}
-          <SectionLabel>Traductions</SectionLabel>
-
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              Mot Soninké <span className="text-red-400">*</span>
-            </label>
-            <Input name="soninke" placeholder="ex: naaxu" required />
+        {/* ── STICKY HEADER — word always visible ─────────────────────────── */}
+        <div className="px-5 py-3 border-b border-gray-100/80 flex-shrink-0 bg-white">
+          <p className={`font-black tracking-tight leading-none transition-all duration-200 ${
+            soninke ? "text-3xl text-gray-900" : "text-2xl text-gray-300"
+          }`}>
+            {soninke || "Soninké…"}
+          </p>
+          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap min-h-[20px]">
+            {metaTags.length === 0 ? (
+              <span className="text-xs text-gray-300">catégorie · région</span>
+            ) : (
+              metaTags.map((t, i) => (
+                <span key={t}>
+                  {i > 0 && <span className="text-gray-300 text-xs mr-1.5">·</span>}
+                  <span className="text-xs font-semibold text-amber-600 lowercase">{t}</span>
+                </span>
+              ))
+            )}
           </div>
+        </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Anglais</label>
-              <Input name="english" placeholder="ex: cow" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Français</label>
-              <Input name="french" placeholder="ex: vache" />
-            </div>
-          </div>
-          <p className="text-[11px] text-gray-400 -mt-2">Au moins une traduction est requise.</p>
-
-          {/* ── SECTION 2: Métadonnées linguistiques ───────────────────── */}
-          <SectionLabel>Métadonnées linguistiques</SectionLabel>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Catégorie grammaticale
-              </label>
-              <select name="partOfSpeech" className={selectCls}>
-                <option value="">— sélectionner —</option>
-                {PARTS_OF_SPEECH.map((p) => (
-                  <option key={p} value={p}>{labelOf(p)}</option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Type d&apos;entrée
-              </label>
-              <select name="wordType" className={selectCls}>
-                <option value="">— sélectionner —</option>
-                {WORD_TYPES.map((t) => (
-                  <option key={t} value={t}>{labelOf(t)}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Dialecte / Région
-              </label>
-              <select name="dialect" className={selectCls}>
-                <option value="">— sélectionner —</option>
-                {DIALECTS.map((d) => (
-                  <option key={d} value={d}>{labelOf(d)}</option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Phonétique
-              </label>
-              <Input name="phonetic" placeholder="ex: naː-xu" />
-            </div>
-          </div>
-
-          {/* ── SECTION 3: Catégories sémantiques ─────────────────────── */}
-          <SectionLabel>Catégories sémantiques</SectionLabel>
-          <MultiSelect
-            options={SEMANTIC_CATEGORIES}
-            selected={semanticCategories}
-            onChange={setSemanticCategories}
-            placeholder="Rechercher une catégorie… (FAMILY, ANIMALS…)"
-          />
-
-          {/* ── SECTION 4: Contenu ────────────────────────────────────── */}
-          <SectionLabel>Contenu</SectionLabel>
-
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Définition</label>
-            <TextArea name="definition" placeholder="Décrivez le sens du mot…" className="min-h-[72px]" />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Exemple d&apos;utilisation</label>
-            <Input name="example" placeholder="ex: Naaxu xa dafe baane." />
-          </div>
-
-          {/* ── SECTION 5: Prononciation ──────────────────────────────── */}
-          <SectionLabel>Prononciation</SectionLabel>
-          <VoiceRecorder
-            onBlob={(b) => { audioBlobRef.current = b; }}
-            uploading={uploadingAudio}
-            uploadDone={audioDone}
-          />
-
-          {/* ── SECTION 6: Contributeur ───────────────────────────────── */}
-          <SectionLabel>Contributeur</SectionLabel>
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Votre nom (optionnel)</label>
-            <Input name="submittedBy" placeholder="ex: Moussa Kouyaté" />
-          </div>
-          {busy ? (
-            <div className="space-y-2 mt-2">
-              {/* Progress strip */}
-              <div className="flex items-center gap-2 rounded-2xl bg-amber-50 border border-amber-100 px-4 py-3">
-                {/* Step 1 */}
-                <div className={`flex items-center gap-1.5 text-xs font-semibold ${
-                  step === "uploading-audio" ? "text-amber-700" :
-                  audioDone ? "text-green-600" : "text-gray-300"
-                }`}>
-                  {step === "uploading-audio" ? (
-                    <Spinner className="text-amber-600" />
-                  ) : audioDone ? (
-                    <BsCheckCircleFill />
-                  ) : (
-                    <span className="h-4 w-4 rounded-full border-2 border-current flex-shrink-0" />
-                  )}
-                  Note vocale
+        {/* ── Slide content ───────────────────────────────────────────────── */}
+        <div className="flex-1 overflow-hidden relative">
+          <AnimatePresence custom={dir} mode="wait">
+            <motion.div
+              key={slide}
+              custom={dir}
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              className="absolute inset-0 overflow-y-auto px-5 py-5 space-y-5"
+            >
+              {/* STEP 0 — Mot & Traductions */}
+              {slide === 0 && (
+                <div className="space-y-5">
+                  <div>
+                    <p className="text-xl font-bold text-gray-900 mb-1">Quel est le mot ?</p>
+                    <p className="text-sm text-gray-400">Entrez le mot en Soninké avec au moins une traduction.</p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
+                      Mot Soninké <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      value={soninke}
+                      onChange={(e) => setSoninke(e.target.value)}
+                      placeholder="ex: naaxu"
+                      autoFocus
+                      className="w-full rounded-2xl border border-amber-100 bg-white px-4 py-4 text-2xl font-bold text-gray-900 shadow-sm outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-200/60 placeholder:text-gray-200 placeholder:font-normal placeholder:text-xl"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Anglais</label>
+                      <Input value={english} onChange={(e) => setEnglish(e.target.value)} placeholder="ex: cow" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Français</label>
+                      <Input value={french} onChange={(e) => setFrench(e.target.value)} placeholder="ex: vache" />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Phonétique</label>
+                    <Input value={phonetic} onChange={(e) => setPhonetic(e.target.value)} placeholder="ex: naː-xu" />
+                  </div>
                 </div>
+              )}
 
-                {/* connector */}
-                <div className={`flex-1 h-0.5 rounded-full transition-colors ${audioDone ? "bg-green-300" : "bg-gray-200"}`} />
-
-                {/* Step 2 */}
-                <div className={`flex items-center gap-1.5 text-xs font-semibold ${
-                  step === "saving-word" ? "text-amber-700" : "text-gray-300"
-                }`}>
-                  {step === "saving-word" ? (
-                    <Spinner className="text-amber-600" />
-                  ) : (
-                    <span className="h-4 w-4 rounded-full border-2 border-current flex-shrink-0" />
-                  )}
-                  Enregistrement
+              {/* STEP 1 — Catégorie grammaticale */}
+              {slide === 1 && (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xl font-bold text-gray-900 mb-1">Catégorie grammaticale</p>
+                    <p className="text-sm text-gray-400">Quelle est la nature de ce mot ?</p>
+                  </div>
+                  <ChipSelector options={PARTS_OF_SPEECH} value={partOfSpeech} onChange={setPartOfSpeech} cols={3} />
                 </div>
-              </div>
+              )}
 
-              <button
-                type="button"
-                disabled
-                className="w-full rounded-2xl bg-amber-200 text-amber-700 py-3 text-sm font-semibold opacity-80 cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                <Spinner size="md" className="text-amber-600" />
-                {step === "uploading-audio" ? "Envoi de la note vocale…" :
-                 step === "audio-done" ? "Note vocale enregistrée ✓" :
-                 "Enregistrement du mot…"}
-              </button>
-            </div>
+              {/* STEP 2 — Type & Dialecte */}
+              {slide === 2 && (
+                <div className="space-y-6">
+                  <div>
+                    <p className="text-xl font-bold text-gray-900 mb-1">Type d&apos;entrée</p>
+                    <p className="text-sm text-gray-400">S&apos;agit-il d&apos;un mot simple, d&apos;un proverbe, d&apos;une expression ?</p>
+                  </div>
+                  <ChipSelector options={WORD_TYPES} value={wordType} onChange={setWordType} cols={2} />
+
+                  <div>
+                    <p className="text-base font-bold text-gray-900 mb-1 mt-2">Région / Dialecte</p>
+                    <p className="text-sm text-gray-400 mb-3">Dans quelle région ce mot est-il utilisé ?</p>
+                    <ChipSelector options={DIALECTS} value={dialect} onChange={setDialect} cols={3} />
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 3 — Catégories sémantiques */}
+              {slide === 3 && (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xl font-bold text-gray-900 mb-1">Catégories sémantiques</p>
+                    <p className="text-sm text-gray-400">Sélectionnez tous les domaines liés à ce mot. Plus vous en ajoutez, plus le corpus est riche.</p>
+                  </div>
+                  <MultiSelect
+                    options={SEMANTIC_CATEGORIES}
+                    selected={semanticCategories}
+                    onChange={setSemanticCategories}
+                    placeholder="Rechercher… FAMILY, ANIMALS, TIME…"
+                  />
+                </div>
+              )}
+
+              {/* STEP 4 — Définition & Exemple */}
+              {slide === 4 && (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xl font-bold text-gray-900 mb-1">Définition & Exemple</p>
+                    <p className="text-sm text-gray-400">Décrivez le sens du mot et donnez un exemple d&apos;utilisation.</p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Définition</label>
+                    <TextArea
+                      value={definition}
+                      onChange={(e) => setDefinition(e.target.value)}
+                      placeholder="Décrivez le sens…"
+                      className="min-h-[100px]"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Exemple</label>
+                    <Input value={example} onChange={(e) => setExample(e.target.value)} placeholder="ex: Naaxu xa dafe baane." />
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 5 — Prononciation */}
+              {slide === 5 && (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xl font-bold text-gray-900 mb-1">Prononciation</p>
+                    <p className="text-sm text-gray-400">Enregistrez votre voix pour archiver la prononciation du mot.</p>
+                  </div>
+                  <VoiceRecorder
+                    onBlob={(b) => { audioBlobRef.current = b; }}
+                    uploading={uploadingAudio}
+                    uploadDone={audioDone}
+                  />
+                </div>
+              )}
+
+              {/* STEP 6 — Récap & Soumettre */}
+              {slide === 6 && (
+                <div className="space-y-5">
+                  <div>
+                    <p className="text-xl font-bold text-gray-900 mb-1">Prêt à soumettre ?</p>
+                    <p className="text-sm text-gray-400">Votre contribution sera validée par un administrateur avant d&apos;apparaître dans le dictionnaire.</p>
+                  </div>
+
+                  {/* Summary card */}
+                  <div className="glass rounded-2xl p-4 space-y-2 text-sm">
+                    <Row label="Soninké"    value={soninke} />
+                    {english && <Row label="Anglais"    value={english} />}
+                    {french  && <Row label="Français"   value={french} />}
+                    {phonetic && <Row label="Phonétique" value={`/${phonetic}/`} />}
+                    {partOfSpeech && <Row label="Grammaire"  value={labelOf(partOfSpeech)} />}
+                    {wordType && <Row label="Type"       value={labelOf(wordType)} />}
+                    {dialect  && <Row label="Région"     value={dialect} />}
+                    {semanticCategories.length > 0 && (
+                      <Row label="Sémantique" value={semanticCategories.map(labelOf).join(", ")} />
+                    )}
+                    {definition && <Row label="Définition" value={definition} />}
+                    {example && <Row label="Exemple"    value={`"${example}"`} />}
+                    {audioBlobRef.current && <Row label="Audio" value="✓ enregistrement joint" />}
+                  </div>
+
+                  {error && (
+                    <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{error}</p>
+                  )}
+                  {audioWarning && (
+                    <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2">⚠️ {audioWarning}</p>
+                  )}
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Votre nom (optionnel)</label>
+                    <Input value={submittedBy} onChange={(e) => setSubmittedBy(e.target.value)} placeholder="ex: Moussa Kouyaté" />
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* ── Navigation bar ───────────────────────────────────────────────── */}
+        <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100/80 bg-white flex items-center gap-3">
+          {slide > 0 ? (
+            <button
+              type="button"
+              onClick={() => go(slide - 1)}
+              disabled={busy}
+              className="flex items-center justify-center h-12 w-12 rounded-2xl border border-gray-200 text-gray-500 hover:bg-gray-50 transition flex-shrink-0"
+            >
+              <BsArrowRight className="rotate-180 text-lg" />
+            </button>
           ) : (
-            <Button type="submit" className="w-full mt-2">
-              Soumettre le mot
-            </Button>
+            <div className="w-12" />
           )}
-        </form>
+
+          {slide < STEPS.length - 1 ? (
+            <button
+              type="button"
+              onClick={() => {
+                const err = canNext();
+                if (err) { setError(err); return; }
+                go(slide + 1);
+              }}
+              className="flex-1 flex items-center justify-center gap-2 h-12 rounded-2xl bg-amber-500 text-white font-semibold text-sm hover:bg-amber-600 active:scale-[0.99] transition shadow-md shadow-amber-200"
+            >
+              {STEPS[slide + 1].label}
+              <BsArrowRight className="text-base" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={busy}
+              className="flex-1 flex items-center justify-center gap-2 h-12 rounded-2xl bg-gray-900 text-white font-semibold text-sm hover:bg-gray-800 active:scale-[0.99] transition disabled:opacity-60"
+            >
+              {busy ? (
+                <>
+                  <Spinner size="md" className="text-white" />
+                  {uploadStep === "uploading-audio" ? "Audio…" :
+                   uploadStep === "audio-done"      ? "Audio ✓" :
+                   uploadStep === "saving-word"     ? "Envoi…" : "Envoi…"}
+                </>
+              ) : (
+                <>
+                  <BsCheckCircleFill />
+                  Soumettre
+                </>
+              )}
+            </button>
+          )}
+        </div>
       </motion.div>
     </motion.div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex gap-2">
+      <span className="text-gray-400 w-24 flex-shrink-0 text-xs font-semibold uppercase tracking-wide pt-0.5">{label}</span>
+      <span className="text-gray-700 flex-1 text-sm leading-snug">{value}</span>
+    </div>
   );
 }
 
