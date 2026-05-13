@@ -96,11 +96,14 @@ export interface ApiResponse<T> {
 export interface DictionaryEntry {
   _id: string;
   soninke: string;
-  english: string;
+  english?: string;
   french?: string;
   audioUrl?: string;
   phonetic?: string;
   partOfSpeech?: string;
+  wordType?: string;
+  dialect?: string;
+  semanticCategories?: string[];
   definition?: string;
   example?: string;
   kemetRapprochement?: string;

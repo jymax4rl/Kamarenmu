@@ -2,11 +2,15 @@ import mongoose, { Schema, type Document, type Model } from "mongoose";
 
 export interface IDictionaryEntry {
   soninke: string;
-  english: string;
+  english?: string;
   french?: string;
   audioUrl?: string;
   phonetic?: string;
-  partOfSpeech?: string;
+  // Standardised linguistic metadata
+  partOfSpeech?: string;          // NOUN, VERB, ADJECTIVE … (enum)
+  wordType?: string;               // WORD, PHRASE, PROVERB … (enum)
+  dialect?: string;                // MALI, SENEGAL … (enum)
+  semanticCategories?: string[];   // FAMILY, ANIMALS … (multiselect)
   definition?: string;
   example?: string;
   kemetRapprochement?: string;
@@ -28,6 +32,9 @@ const DictionaryEntrySchema = new Schema<IDictionaryEntryDoc>(
     audioUrl: { type: String, trim: true },
     phonetic: { type: String, trim: true },
     partOfSpeech: { type: String, trim: true },
+    wordType: { type: String, trim: true },
+    dialect: { type: String, trim: true },
+    semanticCategories: [{ type: String, trim: true }],
     definition: { type: String, trim: true },
     example: { type: String, trim: true },
     kemetRapprochement: { type: String, trim: true },
@@ -45,7 +52,10 @@ const DictionaryEntrySchema = new Schema<IDictionaryEntryDoc>(
   { timestamps: true }
 );
 
-DictionaryEntrySchema.index({ soninke: "text", english: "text" });
+DictionaryEntrySchema.index({ soninke: "text", english: "text", french: "text" });
+DictionaryEntrySchema.index({ semanticCategories: 1 });
+DictionaryEntrySchema.index({ dialect: 1 });
+DictionaryEntrySchema.index({ wordType: 1 });
 DictionaryEntrySchema.index({ status: 1, createdAt: -1 });
 
 export const DictionaryEntry: Model<IDictionaryEntryDoc> =

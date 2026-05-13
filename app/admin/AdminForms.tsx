@@ -259,7 +259,7 @@ function FlaggedDictionaryEntries() {
   function startEdit(entry: DictionaryEntry) {
     setEditing((e) => ({
       ...e,
-      [entry._id]: { english: entry.english, definition: entry.definition ?? "" },
+      [entry._id]: { english: entry.english ?? "", definition: entry.definition ?? "" },
     }));
   }
 

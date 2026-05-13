@@ -17,6 +17,13 @@ import {
   BsCheckCircleFill,
 } from "react-icons/bs";
 import type { DictionaryEntry, LinguisticReference } from "@/types";
+import {
+  PARTS_OF_SPEECH,
+  WORD_TYPES,
+  DIALECTS,
+  SEMANTIC_CATEGORIES,
+  labelOf,
+} from "@/lib/dictionary-vocab";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input, TextArea } from "@/components/ui/Input";
@@ -33,9 +40,6 @@ function Spinner({ size = "sm", className = "" }: { size?: "sm" | "md"; classNam
   );
 }
 
-const POS_OPTIONS = [
-  "noun", "verb", "adjective", "adverb", "phrase", "expression", "other",
-];
 
 // ─── localStorage helpers ────────────────────────────────────────────────────
 
@@ -350,8 +354,18 @@ function DictionaryCard({
                 )}
                 {entry.partOfSpeech && (
                   <Badge tone="muted" className="text-[10px]">
-                    {entry.partOfSpeech}
+                    {labelOf(entry.partOfSpeech)}
                   </Badge>
+                )}
+                {entry.wordType && entry.wordType !== "WORD" && (
+                  <Badge tone="default" className="text-[10px]">
+                    {labelOf(entry.wordType)}
+                  </Badge>
+                )}
+                {entry.dialect && entry.dialect !== "UNKNOWN" && (
+                  <span className="text-[10px] font-semibold text-gray-400 uppercase">
+                    {entry.dialect}
+                  </span>
                 )}
               </div>
               {/* Translations — show whichever fields are present */}
@@ -435,6 +449,24 @@ function DictionaryCard({
                     </p>
                   </div>
                 )}
+                {entry.semanticCategories && entry.semanticCategories.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5">
+                      Catégories sémantiques
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {entry.semanticCategories.map((c) => (
+                        <span
+                          key={c}
+                          className="text-[10px] font-semibold rounded-full bg-amber-100/80 text-amber-800 px-2.5 py-0.5"
+                        >
+                          {labelOf(c)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="rounded-xl bg-amber-50/60 border border-amber-100 px-3 py-2.5">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700 mb-1">
                     Rapprochement Kemet
@@ -457,6 +489,119 @@ function DictionaryCard({
         </AnimatePresence>
       </div>
     </motion.div>
+  );
+}
+
+// ─── Reusable form primitives ─────────────────────────────────────────────────
+
+const selectCls =
+  "w-full rounded-xl border border-amber-100 bg-white px-3 py-3 text-sm text-gray-800 shadow-sm outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-200/60";
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 pt-1">
+      {children}
+    </p>
+  );
+}
+
+// Searchable multi-select with removable chips
+function MultiSelect({
+  options,
+  selected,
+  onChange,
+  placeholder = "Rechercher…",
+}: {
+  options: readonly string[];
+  selected: string[];
+  onChange: (v: string[]) => void;
+  placeholder?: string;
+}) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const filtered = options.filter(
+    (o) =>
+      o.toLowerCase().includes(q.toLowerCase()) &&
+      !selected.includes(o)
+  );
+
+  useEffect(() => {
+    function outside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", outside);
+    return () => document.removeEventListener("mousedown", outside);
+  }, []);
+
+  function add(v: string) {
+    onChange([...selected, v]);
+    setQ("");
+  }
+
+  function remove(v: string) {
+    onChange(selected.filter((s) => s !== v));
+  }
+
+  return (
+    <div ref={containerRef} className="space-y-1.5">
+      {/* Selected chips */}
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selected.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => remove(s)}
+              className="flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 text-[11px] font-semibold px-2.5 py-1 hover:bg-amber-200 transition"
+            >
+              {labelOf(s)}
+              <IoClose className="text-xs" />
+            </button>
+          ))}
+        </div>
+      )}
+      {/* Search input */}
+      <div className="relative">
+        <input
+          type="text"
+          value={q}
+          onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder={selected.length === 0 ? placeholder : "Ajouter…"}
+          className="w-full rounded-xl border border-amber-100 bg-white px-3 py-2.5 text-sm text-gray-800 shadow-sm outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-200/60 placeholder:text-gray-400"
+        />
+        {/* Dropdown */}
+        <AnimatePresence>
+          {open && filtered.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.12 }}
+              className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-2xl bg-white border border-amber-100 shadow-xl shadow-amber-100/40 py-1"
+            >
+              {filtered.map((o) => (
+                <button
+                  key={o}
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); add(o); }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-amber-50 transition"
+                >
+                  {labelOf(o)}
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+      {selected.length === 0 && (
+        <p className="text-[11px] text-gray-400">Tapez pour rechercher et sélectionner plusieurs catégories.</p>
+      )}
+    </div>
   );
 }
 
@@ -637,6 +782,7 @@ function AddWordSheet({
   const [step, setStep] = useState<"idle" | "uploading-audio" | "audio-done" | "saving-word">("idle");
   const [error, setError] = useState("");
   const [audioWarning, setAudioWarning] = useState("");
+  const [semanticCategories, setSemanticCategories] = useState<string[]>([]);
   const audioBlobRef = useRef<Blob | null>(null);
 
   const uploadingAudio = step === "uploading-audio";
@@ -649,7 +795,6 @@ function AddWordSheet({
     setBusy(true);
     const fd = new FormData(e.currentTarget);
 
-    // ── Step 1: upload audio ────────────────────────────────────────────────
     let audioUrl: string | undefined;
     if (audioBlobRef.current) {
       setStep("uploading-audio");
@@ -663,7 +808,6 @@ function AddWordSheet({
         if (json.ok) {
           audioUrl = json.data.url;
           setStep("audio-done");
-          // Brief pause so the green tick is visible before moving on
           await new Promise((r) => setTimeout(r, 600));
         } else {
           setAudioWarning(`Note vocale non sauvegardée : ${json.error || "erreur serveur"}`);
@@ -674,8 +818,6 @@ function AddWordSheet({
         setStep("idle");
       }
     }
-
-    // ── Step 2: save word ────────────────────────────────────────────────────
     setStep("saving-word");
 
     const payload = {
@@ -684,6 +826,9 @@ function AddWordSheet({
       french: String(fd.get("french") || "").trim() || undefined,
       phonetic: String(fd.get("phonetic") || "").trim() || undefined,
       partOfSpeech: String(fd.get("partOfSpeech") || "").trim() || undefined,
+      wordType: String(fd.get("wordType") || "").trim() || undefined,
+      dialect: String(fd.get("dialect") || "").trim() || undefined,
+      semanticCategories: semanticCategories.length > 0 ? semanticCategories : undefined,
       definition: String(fd.get("definition") || "").trim() || undefined,
       example: String(fd.get("example") || "").trim() || undefined,
       submittedBy: String(fd.get("submittedBy") || "").trim() || undefined,
@@ -692,11 +837,13 @@ function AddWordSheet({
     if (!payload.soninke) {
       setError("Le mot Soninké est requis.");
       setBusy(false);
+      setStep("idle");
       return;
     }
     if (!payload.english && !payload.french) {
       setError("Au moins une traduction (anglais ou français) est requise.");
       setBusy(false);
+      setStep("idle");
       return;
     }
     try {
@@ -743,36 +890,27 @@ function AddWordSheet({
         <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
           <div className="w-10 h-1 rounded-full bg-gray-200" />
         </div>
-        <div className="flex items-center justify-between px-5 pb-3 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 pb-2 flex-shrink-0">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Proposer un mot</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Votre contribution sera validée avant publication.
-            </p>
+            <p className="text-xs text-gray-500 mt-0.5">Validé par un administrateur avant publication.</p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full p-2 hover:bg-gray-100 transition"
-          >
+          <button type="button" onClick={onClose} className="rounded-full p-2 hover:bg-gray-100 transition">
             <IoClose className="text-xl text-gray-500" />
           </button>
         </div>
-        <form
-          onSubmit={handleSubmit}
-          className="overflow-y-auto flex-1 px-5 pb-8 space-y-3"
-        >
+
+        <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 px-5 pb-8 space-y-4">
           {error && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
-              {error}
-            </p>
+            <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{error}</p>
           )}
           {audioWarning && (
-            <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2">
-              ⚠️ {audioWarning}
-            </p>
+            <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded-xl px-3 py-2">⚠️ {audioWarning}</p>
           )}
-          {/* Soninke word */}
+
+          {/* ── SECTION 1: Traductions ─────────────────────────────────── */}
+          <SectionLabel>Traductions</SectionLabel>
+
           <div className="space-y-1">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
               Mot Soninké <span className="text-red-400">*</span>
@@ -780,76 +918,99 @@ function AddWordSheet({
             <Input name="soninke" placeholder="ex: naaxu" required />
           </div>
 
-          {/* Translations row */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Anglais
-              </label>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Anglais</label>
               <Input name="english" placeholder="ex: cow" />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Français
-              </label>
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Français</label>
               <Input name="french" placeholder="ex: vache" />
             </div>
           </div>
+          <p className="text-[11px] text-gray-400 -mt-2">Au moins une traduction est requise.</p>
 
-          <p className="text-[11px] text-gray-400 -mt-1">
-            Au moins une traduction est requise.
-          </p>
+          {/* ── SECTION 2: Métadonnées linguistiques ───────────────────── */}
+          <SectionLabel>Métadonnées linguistiques</SectionLabel>
 
-          {/* Phonetic + POS */}
           <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                Catégorie grammaticale
+              </label>
+              <select name="partOfSpeech" className={selectCls}>
+                <option value="">— sélectionner —</option>
+                {PARTS_OF_SPEECH.map((p) => (
+                  <option key={p} value={p}>{labelOf(p)}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                Type d&apos;entrée
+              </label>
+              <select name="wordType" className={selectCls}>
+                <option value="">— sélectionner —</option>
+                {WORD_TYPES.map((t) => (
+                  <option key={t} value={t}>{labelOf(t)}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                Dialecte / Région
+              </label>
+              <select name="dialect" className={selectCls}>
+                <option value="">— sélectionner —</option>
+                {DIALECTS.map((d) => (
+                  <option key={d} value={d}>{labelOf(d)}</option>
+                ))}
+              </select>
+            </div>
             <div className="space-y-1">
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 Phonétique
               </label>
               <Input name="phonetic" placeholder="ex: naː-xu" />
             </div>
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Nature
-              </label>
-              <select
-                name="partOfSpeech"
-                className="w-full rounded-xl border border-amber-100 bg-white px-3 py-3 text-sm text-gray-800 shadow-sm outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-200/60"
-              >
-                <option value="">— choisir —</option>
-                {POS_OPTIONS.map((p) => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-            </div>
           </div>
 
-          {/* Voice recorder */}
+          {/* ── SECTION 3: Catégories sémantiques ─────────────────────── */}
+          <SectionLabel>Catégories sémantiques</SectionLabel>
+          <MultiSelect
+            options={SEMANTIC_CATEGORIES}
+            selected={semanticCategories}
+            onChange={setSemanticCategories}
+            placeholder="Rechercher une catégorie… (FAMILY, ANIMALS…)"
+          />
+
+          {/* ── SECTION 4: Contenu ────────────────────────────────────── */}
+          <SectionLabel>Contenu</SectionLabel>
+
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Définition</label>
+            <TextArea name="definition" placeholder="Décrivez le sens du mot…" className="min-h-[72px]" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Exemple d&apos;utilisation</label>
+            <Input name="example" placeholder="ex: Naaxu xa dafe baane." />
+          </div>
+
+          {/* ── SECTION 5: Prononciation ──────────────────────────────── */}
+          <SectionLabel>Prononciation</SectionLabel>
           <VoiceRecorder
             onBlob={(b) => { audioBlobRef.current = b; }}
             uploading={uploadingAudio}
             uploadDone={audioDone}
           />
+
+          {/* ── SECTION 6: Contributeur ───────────────────────────────── */}
+          <SectionLabel>Contributeur</SectionLabel>
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              Définition (optionnel)
-            </label>
-            <TextArea
-              name="definition"
-              placeholder="Décrivez le sens du mot…"
-              className="min-h-[80px]"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              Exemple d&apos;utilisation (optionnel)
-            </label>
-            <Input name="example" placeholder="ex: Naaxu xa dafe baane." />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              Votre nom (optionnel)
-            </label>
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Votre nom (optionnel)</label>
             <Input name="submittedBy" placeholder="ex: Moussa Kouyaté" />
           </div>
           {busy ? (
