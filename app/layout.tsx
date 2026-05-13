@@ -53,7 +53,7 @@ export default function RootLayout({
         <Providers>
           <MobileContainer>
             <Header />
-            <main className="relative z-10 flex-1 pt-14 pb-24 px-4">{children}</main>
+            <main className="relative flex-1 pt-14 pb-24 px-4">{children}</main>
             <BottomNav />
           </MobileContainer>
         </Providers>

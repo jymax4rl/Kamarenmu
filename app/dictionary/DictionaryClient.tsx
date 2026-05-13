@@ -1180,8 +1180,8 @@ function AddWordSheet({
           </AnimatePresence>
         </div>
 
-        {/* ── Navigation bar ───────────────────────────────────────────────── */}
-        <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100/80 bg-white flex items-center gap-3">
+        {/* ── Navigation bar — pb-20 clears the fixed BottomNav ──────────── */}
+        <div className="flex-shrink-0 px-5 pt-4 pb-20 border-t border-gray-100/80 bg-white flex items-center gap-3">
           {slide > 0 ? (
             <button
               type="button"
