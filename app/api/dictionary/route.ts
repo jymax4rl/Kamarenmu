@@ -62,18 +62,31 @@ export async function POST(req: NextRequest) {
   try {
     await connectDB();
     const body = await req.json();
-    const { soninke, english, phonetic, partOfSpeech, definition, example, submittedBy, submittedByEmail } = body;
+    const {
+      soninke,
+      english,
+      french,
+      audioUrl,
+      phonetic,
+      partOfSpeech,
+      definition,
+      example,
+      submittedBy,
+      submittedByEmail,
+    } = body;
 
     if (!soninke?.trim()) {
       return jsonError("soninke field is required", 400);
     }
-    if (!english?.trim() && !body.french?.trim()) {
+    if (!english?.trim() && !french?.trim()) {
       return jsonError("At least one translation (english or french) is required", 400);
     }
 
     const created = await DictionaryEntry.create({
       soninke: soninke.trim(),
-      english: english.trim(),
+      english: english?.trim() || undefined,
+      french: french?.trim() || undefined,
+      audioUrl: audioUrl?.trim() || undefined,
       phonetic: phonetic?.trim() || undefined,
       partOfSpeech: partOfSpeech?.trim() || undefined,
       definition: definition?.trim() || undefined,
