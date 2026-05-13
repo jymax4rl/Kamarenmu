@@ -12,15 +12,26 @@ import {
   BsHandThumbsDownFill,
   BsMicFill,
   BsStopFill,
-  BsPlayFill,
   BsArrowClockwise,
   BsVolumeUpFill,
+  BsCheckCircleFill,
 } from "react-icons/bs";
 import type { DictionaryEntry, LinguisticReference } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input, TextArea } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
+
+// ─── Spinner ──────────────────────────────────────────────────────────────────
+function Spinner({ size = "sm", className = "" }: { size?: "sm" | "md"; className?: string }) {
+  const s = size === "md" ? "h-5 w-5 border-2" : "h-4 w-4 border-2";
+  return (
+    <span
+      className={`inline-block rounded-full border-current border-t-transparent animate-spin ${s} ${className}`}
+      aria-hidden
+    />
+  );
+}
 
 const POS_OPTIONS = [
   "noun", "verb", "adjective", "adverb", "phrase", "expression", "other",
@@ -454,8 +465,12 @@ type RecordState = "idle" | "recording" | "recorded";
 
 function VoiceRecorder({
   onBlob,
+  uploading = false,
+  uploadDone = false,
 }: {
   onBlob: (blob: Blob | null) => void;
+  uploading?: boolean;
+  uploadDone?: boolean;
 }) {
   const [state, setState] = useState<RecordState>("idle");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -559,15 +574,45 @@ function VoiceRecorder({
 
       {state === "recorded" && previewUrl && (
         <div className="space-y-2">
-          <audio
-            src={previewUrl}
-            controls
-            className="w-full h-10 rounded-xl"
-          />
+          <div className="relative rounded-xl overflow-hidden">
+            <audio
+              src={previewUrl}
+              controls
+              className={`w-full h-10 rounded-xl transition-opacity ${uploading ? "opacity-40" : ""}`}
+            />
+            {/* Upload progress overlay */}
+            <AnimatePresence>
+              {(uploading || uploadDone) && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className={`absolute inset-0 flex items-center justify-center gap-2 rounded-xl text-xs font-semibold ${
+                    uploadDone
+                      ? "bg-green-500/20 text-green-700"
+                      : "bg-amber-500/20 text-amber-800"
+                  }`}
+                >
+                  {uploadDone ? (
+                    <>
+                      <BsCheckCircleFill className="text-green-600" />
+                      Note vocale enregistrée
+                    </>
+                  ) : (
+                    <>
+                      <Spinner className="text-amber-600" />
+                      Envoi en cours…
+                    </>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
           <button
             type="button"
             onClick={reset}
-            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-500 transition"
+            disabled={uploading}
+            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-red-500 transition disabled:opacity-40 disabled:pointer-events-none"
           >
             <BsArrowClockwise />
             Recommencer
@@ -588,10 +633,13 @@ function AddWordSheet({
   onSuccess: (entry: DictionaryEntry) => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [busyLabel, setBusyLabel] = useState("");
+  const [step, setStep] = useState<"idle" | "uploading-audio" | "audio-done" | "saving-word">("idle");
   const [error, setError] = useState("");
   const [audioWarning, setAudioWarning] = useState("");
   const audioBlobRef = useRef<Blob | null>(null);
+
+  const uploadingAudio = step === "uploading-audio";
+  const audioDone = step === "audio-done" || step === "saving-word";
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -600,10 +648,10 @@ function AddWordSheet({
     setBusy(true);
     const fd = new FormData(e.currentTarget);
 
-    // Upload audio first (if recorded)
+    // ── Step 1: upload audio ────────────────────────────────────────────────
     let audioUrl: string | undefined;
     if (audioBlobRef.current) {
-      setBusyLabel("Envoi de la note vocale…");
+      setStep("uploading-audio");
       try {
         const res = await fetch("/api/upload-audio", {
           method: "POST",
@@ -613,14 +661,21 @@ function AddWordSheet({
         const json = await res.json();
         if (json.ok) {
           audioUrl = json.data.url;
+          setStep("audio-done");
+          // Brief pause so the green tick is visible before moving on
+          await new Promise((r) => setTimeout(r, 600));
         } else {
           setAudioWarning(`Note vocale non sauvegardée : ${json.error || "erreur serveur"}`);
+          setStep("idle");
         }
       } catch {
         setAudioWarning("Note vocale non sauvegardée : erreur réseau.");
+        setStep("idle");
       }
     }
-    setBusyLabel("Envoi du mot…");
+
+    // ── Step 2: save word ────────────────────────────────────────────────────
+    setStep("saving-word");
 
     const payload = {
       soninke: String(fd.get("soninke") || "").trim(),
@@ -656,7 +711,7 @@ function AddWordSheet({
       setError(err instanceof Error ? err.message : "Erreur lors de l'envoi.");
     } finally {
       setBusy(false);
-      setBusyLabel("");
+      setStep("idle");
     }
   }
 
@@ -769,7 +824,11 @@ function AddWordSheet({
           </div>
 
           {/* Voice recorder */}
-          <VoiceRecorder onBlob={(b) => { audioBlobRef.current = b; }} />
+          <VoiceRecorder
+            onBlob={(b) => { audioBlobRef.current = b; }}
+            uploading={uploadingAudio}
+            uploadDone={audioDone}
+          />
           <div className="space-y-1">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
               Définition (optionnel)
@@ -792,9 +851,57 @@ function AddWordSheet({
             </label>
             <Input name="submittedBy" placeholder="ex: Moussa Kouyaté" />
           </div>
-          <Button type="submit" className="w-full mt-2" disabled={busy}>
-            {busy ? (busyLabel || "Envoi…") : "Soumettre le mot"}
-          </Button>
+          {busy ? (
+            <div className="space-y-2 mt-2">
+              {/* Progress strip */}
+              <div className="flex items-center gap-2 rounded-2xl bg-amber-50 border border-amber-100 px-4 py-3">
+                {/* Step 1 */}
+                <div className={`flex items-center gap-1.5 text-xs font-semibold ${
+                  step === "uploading-audio" ? "text-amber-700" :
+                  audioDone ? "text-green-600" : "text-gray-300"
+                }`}>
+                  {step === "uploading-audio" ? (
+                    <Spinner className="text-amber-600" />
+                  ) : audioDone ? (
+                    <BsCheckCircleFill />
+                  ) : (
+                    <span className="h-4 w-4 rounded-full border-2 border-current flex-shrink-0" />
+                  )}
+                  Note vocale
+                </div>
+
+                {/* connector */}
+                <div className={`flex-1 h-0.5 rounded-full transition-colors ${audioDone ? "bg-green-300" : "bg-gray-200"}`} />
+
+                {/* Step 2 */}
+                <div className={`flex items-center gap-1.5 text-xs font-semibold ${
+                  step === "saving-word" ? "text-amber-700" : "text-gray-300"
+                }`}>
+                  {step === "saving-word" ? (
+                    <Spinner className="text-amber-600" />
+                  ) : (
+                    <span className="h-4 w-4 rounded-full border-2 border-current flex-shrink-0" />
+                  )}
+                  Enregistrement
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled
+                className="w-full rounded-2xl bg-amber-200 text-amber-700 py-3 text-sm font-semibold opacity-80 cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <Spinner size="md" className="text-amber-600" />
+                {step === "uploading-audio" ? "Envoi de la note vocale…" :
+                 step === "audio-done" ? "Note vocale enregistrée ✓" :
+                 "Enregistrement du mot…"}
+              </button>
+            </div>
+          ) : (
+            <Button type="submit" className="w-full mt-2">
+              Soumettre le mot
+            </Button>
+          )}
         </form>
       </motion.div>
     </motion.div>
