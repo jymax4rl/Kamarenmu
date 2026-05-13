@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
       wordType,
       dialect,
       semanticCategories,
+      frequencyLevel,
       definition,
       example,
       submittedBy,
@@ -97,6 +98,7 @@ export async function POST(req: NextRequest) {
       semanticCategories: Array.isArray(semanticCategories)
         ? semanticCategories.map((c: string) => c.trim()).filter(Boolean)
         : undefined,
+      frequencyLevel: frequencyLevel?.trim() || undefined,
       definition: definition?.trim() || undefined,
       example: example?.trim() || undefined,
       submittedBy: submittedBy?.trim() || undefined,

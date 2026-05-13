@@ -22,8 +22,10 @@ import {
   WORD_TYPES,
   DIALECTS,
   SEMANTIC_CATEGORIES,
+  FREQUENCY_LEVELS,
   labelOf,
 } from "@/lib/dictionary-vocab";
+import type { AISuggestion } from "@/app/api/ai-suggest/route";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input, TextArea } from "@/components/ui/Input";
@@ -769,6 +771,29 @@ function VoiceRecorder({
   );
 }
 
+// ─── AI suggestion badge ──────────────────────────────────────────────────────
+
+function AiBadge({ visible, loading }: { visible: boolean; loading?: boolean }) {
+  if (loading) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-violet-500 bg-violet-50 border border-violet-200 rounded-full px-2 py-0.5 animate-pulse">
+        <Spinner size="sm" className="text-violet-400" />
+        Analyse IA…
+      </span>
+    );
+  }
+  if (!visible) return null;
+  return (
+    <motion.span
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="inline-flex items-center gap-1 text-[10px] font-semibold text-violet-600 bg-violet-50 border border-violet-200 rounded-full px-2 py-0.5"
+    >
+      ✦ IA
+    </motion.span>
+  );
+}
+
 // ─── Chip selector (single-select pill grid) ─────────────────────────────────
 
 function ChipSelector({
@@ -826,6 +851,12 @@ function AddWordSheet({
   const [slide, setSlide] = useState(0);
   const [dir, setDir] = useState(1); // 1=forward, -1=back
 
+  // AI suggestions
+  const [aiSuggestions, setAiSuggestions] = useState<AISuggestion>({});
+  const [aiLoading, setAiLoading] = useState(false);
+  // Fields currently showing an AI-suggested value (cleared when user edits)
+  const [aiFields, setAiFields] = useState<Set<string>>(new Set());
+
   // Upload/submit state
   const [busy, setBusy] = useState(false);
   const [uploadStep, setUploadStep] = useState<"idle"|"uploading-audio"|"audio-done"|"saving-word">("idle");
@@ -841,6 +872,7 @@ function AddWordSheet({
   const [wordType, setWordType]     = useState("");
   const [dialect, setDialect]       = useState("");
   const [semanticCategories, setSemanticCategories] = useState<string[]>([]);
+  const [frequencyLevel, setFrequencyLevel] = useState("");
   const [definition, setDefinition] = useState("");
   const [example, setExample]       = useState("");
   const [submittedBy, setSubmittedBy] = useState("");
@@ -849,10 +881,44 @@ function AddWordSheet({
   const uploadingAudio = uploadStep === "uploading-audio";
   const audioDone      = uploadStep === "audio-done" || uploadStep === "saving-word";
 
+  function applyAiSuggestions(s: AISuggestion) {
+    const applied = new Set<string>();
+    if (s.partOfSpeech      && !partOfSpeech)        { setPartOfSpeech(s.partOfSpeech);           applied.add("partOfSpeech"); }
+    if (s.wordType          && !wordType)             { setWordType(s.wordType);                   applied.add("wordType"); }
+    if (s.frequencyLevel    && !frequencyLevel)       { setFrequencyLevel(s.frequencyLevel);       applied.add("frequencyLevel"); }
+    if (s.semanticCategories?.length && semanticCategories.length === 0) {
+      setSemanticCategories(s.semanticCategories);
+      applied.add("semanticCategories");
+    }
+    setAiFields(applied);
+    setAiSuggestions(s);
+  }
+
+  async function fetchAiSuggestions() {
+    if (!soninke.trim() || (!english.trim() && !french.trim())) return;
+    setAiLoading(true);
+    try {
+      const res = await fetch("/api/ai-suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ soninke, english, french }),
+      });
+      const json = await res.json();
+      if (json.ok && json.data?.suggestions) {
+        applyAiSuggestions(json.data.suggestions as AISuggestion);
+      }
+    } catch { /* silent — AI is non-blocking */ }
+    finally { setAiLoading(false); }
+  }
+
   function go(next: number) {
     setDir(next > slide ? 1 : -1);
     setSlide(next);
     setError("");
+    // Trigger AI suggestion fetch when leaving step 0 for the first time
+    if (slide === 0 && next === 1 && !aiLoading && Object.keys(aiSuggestions).length === 0) {
+      fetchAiSuggestions();
+    }
   }
 
   function canNext(): string | null {
@@ -904,6 +970,7 @@ function AddWordSheet({
           wordType: wordType || undefined,
           dialect: dialect || undefined,
           semanticCategories: semanticCategories.length > 0 ? semanticCategories : undefined,
+          frequencyLevel: frequencyLevel || undefined,
           definition: definition.trim() || undefined,
           example: example.trim() || undefined,
           submittedBy: submittedBy.trim() || undefined,
@@ -1059,22 +1126,60 @@ function AddWordSheet({
               {/* STEP 1 — Catégorie grammaticale */}
               {slide === 1 && (
                 <div className="space-y-4">
-                  <div>
-                    <p className="text-xl font-bold text-gray-900 mb-1">Catégorie grammaticale</p>
-                    <p className="text-sm text-gray-400">Quelle est la nature de ce mot ?</p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xl font-bold text-gray-900 mb-1">Catégorie grammaticale</p>
+                      <p className="text-sm text-gray-400">Quelle est la nature de ce mot ?</p>
+                    </div>
+                    <AiBadge visible={aiFields.has("partOfSpeech")} loading={aiLoading} />
                   </div>
-                  <ChipSelector options={PARTS_OF_SPEECH} value={partOfSpeech} onChange={setPartOfSpeech} cols={3} />
+                  <ChipSelector
+                    options={PARTS_OF_SPEECH}
+                    value={partOfSpeech}
+                    onChange={(v) => {
+                      setPartOfSpeech(v);
+                      setAiFields((f) => { const n = new Set(f); n.delete("partOfSpeech"); return n; });
+                    }}
+                    cols={3}
+                  />
                 </div>
               )}
 
-              {/* STEP 2 — Type & Dialecte */}
+              {/* STEP 2 — Type, Fréquence & Dialecte */}
               {slide === 2 && (
                 <div className="space-y-6">
-                  <div>
-                    <p className="text-xl font-bold text-gray-900 mb-1">Type d&apos;entrée</p>
-                    <p className="text-sm text-gray-400">S&apos;agit-il d&apos;un mot simple, d&apos;un proverbe, d&apos;une expression ?</p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xl font-bold text-gray-900 mb-1">Type d&apos;entrée</p>
+                      <p className="text-sm text-gray-400">S&apos;agit-il d&apos;un mot, d&apos;un proverbe, d&apos;une expression ?</p>
+                    </div>
+                    <AiBadge visible={aiFields.has("wordType") || aiFields.has("frequencyLevel")} loading={aiLoading} />
                   </div>
-                  <ChipSelector options={WORD_TYPES} value={wordType} onChange={setWordType} cols={2} />
+                  <ChipSelector
+                    options={WORD_TYPES}
+                    value={wordType}
+                    onChange={(v) => {
+                      setWordType(v);
+                      setAiFields((f) => { const n = new Set(f); n.delete("wordType"); return n; });
+                    }}
+                    cols={2}
+                  />
+
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <p className="text-base font-bold text-gray-900">Fréquence d&apos;usage</p>
+                      {aiFields.has("frequencyLevel") && <AiBadge visible={true} />}
+                    </div>
+                    <ChipSelector
+                      options={FREQUENCY_LEVELS}
+                      value={frequencyLevel}
+                      onChange={(v) => {
+                        setFrequencyLevel(v);
+                        setAiFields((f) => { const n = new Set(f); n.delete("frequencyLevel"); return n; });
+                      }}
+                      cols={3}
+                    />
+                  </div>
 
                   <div>
                     <p className="text-base font-bold text-gray-900 mb-1 mt-2">Région / Dialecte</p>
@@ -1087,14 +1192,41 @@ function AddWordSheet({
               {/* STEP 3 — Catégories sémantiques */}
               {slide === 3 && (
                 <div className="space-y-4">
-                  <div>
-                    <p className="text-xl font-bold text-gray-900 mb-1">Catégories sémantiques</p>
-                    <p className="text-sm text-gray-400">Sélectionnez tous les domaines liés à ce mot. Plus vous en ajoutez, plus le corpus est riche.</p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xl font-bold text-gray-900 mb-1">Catégories sémantiques</p>
+                      <p className="text-sm text-gray-400">Sélectionnez tous les domaines. Plus vous en ajoutez, plus le corpus est riche.</p>
+                    </div>
+                    <AiBadge visible={aiFields.has("semanticCategories")} loading={aiLoading} />
                   </div>
+
+                  {/* AI related concepts — display only, not stored */}
+                  {aiSuggestions.relatedConcepts && aiSuggestions.relatedConcepts.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="rounded-2xl bg-violet-50 border border-violet-100 px-3 py-2.5"
+                    >
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-violet-500 mb-1.5">
+                        ✦ Concepts associés suggérés par l&apos;IA
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {aiSuggestions.relatedConcepts.map((c) => (
+                          <span key={c} className="text-[11px] text-violet-700 bg-violet-100 rounded-full px-2.5 py-0.5 font-medium">
+                            {c}
+                          </span>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+
                   <MultiSelect
                     options={SEMANTIC_CATEGORIES}
                     selected={semanticCategories}
-                    onChange={setSemanticCategories}
+                    onChange={(v) => {
+                      setSemanticCategories(v);
+                      setAiFields((f) => { const n = new Set(f); n.delete("semanticCategories"); return n; });
+                    }}
                     placeholder="Rechercher… FAMILY, ANIMALS, TIME…"
                   />
                 </div>
@@ -1158,6 +1290,7 @@ function AddWordSheet({
                     {semanticCategories.length > 0 && (
                       <Row label="Sémantique" value={semanticCategories.map(labelOf).join(", ")} />
                     )}
+                    {frequencyLevel && <Row label="Fréquence"  value={labelOf(frequencyLevel)} />}
                     {definition && <Row label="Définition" value={definition} />}
                     {example && <Row label="Exemple"    value={`"${example}"`} />}
                     {audioBlobRef.current && <Row label="Audio" value="✓ enregistrement joint" />}

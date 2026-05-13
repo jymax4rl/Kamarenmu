@@ -104,6 +104,7 @@ export interface DictionaryEntry {
   wordType?: string;
   dialect?: string;
   semanticCategories?: string[];
+  frequencyLevel?: string;
   definition?: string;
   example?: string;
   kemetRapprochement?: string;

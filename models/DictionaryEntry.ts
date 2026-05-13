@@ -11,6 +11,7 @@ export interface IDictionaryEntry {
   wordType?: string;               // WORD, PHRASE, PROVERB … (enum)
   dialect?: string;                // MALI, SENEGAL … (enum)
   semanticCategories?: string[];   // FAMILY, ANIMALS … (multiselect)
+  frequencyLevel?: string;         // VERY_COMMON … ARCHAIC (enum)
   definition?: string;
   example?: string;
   kemetRapprochement?: string;
@@ -35,6 +36,7 @@ const DictionaryEntrySchema = new Schema<IDictionaryEntryDoc>(
     wordType: { type: String, trim: true },
     dialect: { type: String, trim: true },
     semanticCategories: [{ type: String, trim: true }],
+    frequencyLevel: { type: String, trim: true },
     definition: { type: String, trim: true },
     example: { type: String, trim: true },
     kemetRapprochement: { type: String, trim: true },

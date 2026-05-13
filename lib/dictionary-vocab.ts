@@ -25,10 +25,15 @@ export const SEMANTIC_CATEGORIES = [
   "ROYALTY", "CULTURE", "FESTIVALS", "DAILY_LIFE",
 ] as const;
 
+export const FREQUENCY_LEVELS = [
+  "VERY_COMMON", "COMMON", "UNCOMMON", "RARE", "ARCHAIC",
+] as const;
+
 export type PartOfSpeech = (typeof PARTS_OF_SPEECH)[number];
 export type WordType = (typeof WORD_TYPES)[number];
 export type Dialect = (typeof DIALECTS)[number];
 export type SemanticCategory = (typeof SEMANTIC_CATEGORIES)[number];
+export type FrequencyLevel = (typeof FREQUENCY_LEVELS)[number];
 
 /** Human-readable label for display */
 export function labelOf(value: string): string {
