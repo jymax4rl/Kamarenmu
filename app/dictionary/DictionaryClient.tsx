@@ -11,7 +11,7 @@ import {
   BsHandThumbsUpFill,
   BsHandThumbsDownFill,
 } from "react-icons/bs";
-import type { DictionaryEntry } from "@/types";
+import type { DictionaryEntry, LinguisticReference } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input, TextArea } from "@/components/ui/Input";
@@ -176,19 +176,83 @@ function VoteButtons({
   );
 }
 
+// ─── Linguistic reference matching ───────────────────────────────────────────
+
+function matchRefs(
+  entry: DictionaryEntry,
+  refs: LinguisticReference[]
+): LinguisticReference[] {
+  const haystack = [
+    entry.soninke,
+    entry.english,
+    entry.definition ?? "",
+    entry.example ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return refs.filter((ref) => {
+    if (ref.isGlobal) return true;
+    return ref.triggerPatterns.some((p) =>
+      p.trim() && haystack.includes(p.trim().toLowerCase())
+    );
+  });
+}
+
+const CATEGORY_LABEL: Record<LinguisticReference["category"], string> = {
+  rule: "Règle",
+  alphabet: "Alphabet",
+  vocabulary: "Vocabulaire",
+  grammar: "Grammaire",
+  culture: "Culture",
+};
+
+const CATEGORY_COLOR: Record<LinguisticReference["category"], string> = {
+  rule: "bg-blue-50 border-blue-100 text-blue-800",
+  alphabet: "bg-violet-50 border-violet-100 text-violet-800",
+  vocabulary: "bg-emerald-50 border-emerald-100 text-emerald-800",
+  grammar: "bg-rose-50 border-rose-100 text-rose-800",
+  culture: "bg-amber-50 border-amber-100 text-amber-800",
+};
+
+function LinguisticRefPanel({ refs }: { refs: LinguisticReference[] }) {
+  if (refs.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+        Références linguistiques
+      </p>
+      {refs.map((ref) => (
+        <div
+          key={ref._id}
+          className={`rounded-xl border px-3 py-2.5 text-sm leading-relaxed ${CATEGORY_COLOR[ref.category]}`}
+        >
+          <p className="text-[10px] font-bold uppercase tracking-wider opacity-60 mb-1">
+            {CATEGORY_LABEL[ref.category]} · {ref.title}
+          </p>
+          <p className="whitespace-pre-line text-xs opacity-90">{ref.body}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Dictionary card ─────────────────────────────────────────────────────────
 
 function DictionaryCard({
   entry,
   voteState,
   onVote,
+  matchedRefs,
 }: {
   entry: DictionaryEntry;
   voteState: VoteState;
   onVote: (id: string, dir: "up" | "down") => Promise<void>;
+  matchedRefs: LinguisticReference[];
 }) {
   const [expanded, setExpanded] = useState(false);
-  const hasMore = entry.definition || entry.example || entry.kemetRapprochement;
+  const hasMore =
+    entry.definition || entry.example || entry.kemetRapprochement || matchedRefs.length > 0;
   const isPending = entry.status === "pending";
 
   return (
@@ -304,6 +368,8 @@ function DictionaryCard({
                     </p>
                   )}
                 </div>
+
+                <LinguisticRefPanel refs={matchedRefs} />
               </div>
             </motion.div>
           )}
@@ -482,8 +548,10 @@ function AddWordSheet({
 
 export function DictionaryClient({
   initialEntries,
+  linguisticRefs = [],
 }: {
   initialEntries: DictionaryEntry[];
+  linguisticRefs?: LinguisticReference[];
 }) {
   // Merge server-approved entries with any locally-saved pending submissions.
   // This runs only on the client (typeof window guard inside ls()).
@@ -707,6 +775,7 @@ export function DictionaryClient({
                 }
               }
               onVote={castVote}
+              matchedRefs={matchRefs(entry, linguisticRefs)}
             />
           ))}
         </div>

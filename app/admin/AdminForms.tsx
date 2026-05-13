@@ -395,6 +395,95 @@ function FlaggedDictionaryEntries() {
   );
 }
 
+// ─── Linguistic reference form ────────────────────────────────────────────────
+
+function LinguisticRefForm({ onDone }: { onDone: (msg: string) => void }) {
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setBusy(true);
+    const fd = new FormData(e.currentTarget);
+    const patterns = String(fd.get("triggerPatterns") || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const payload = {
+      category: String(fd.get("category") || "rule"),
+      title: String(fd.get("title") || "").trim(),
+      body: String(fd.get("body") || "").trim(),
+      triggerPatterns: patterns,
+      isGlobal: fd.get("isGlobal") === "on",
+      sortOrder: parseInt(String(fd.get("sortOrder") || "0"), 10) || 0,
+      isActive: true,
+    };
+    const res = await fetch("/api/linguistic-refs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    setBusy(false);
+    if (!json.ok) { onDone(json.error || "Erreur"); return; }
+    onDone(`✓ Référence "${payload.title}" ajoutée.`);
+    (e.target as HTMLFormElement).reset();
+  }
+
+  return (
+    <form className="space-y-3" onSubmit={handleSubmit}>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            Catégorie
+          </label>
+          <select
+            name="category"
+            className="w-full rounded-xl border border-amber-100 bg-white px-3 py-3 text-sm text-gray-800 shadow-sm outline-none focus:border-amber-300"
+          >
+            <option value="rule">Règle phonologique</option>
+            <option value="alphabet">Alphabet</option>
+            <option value="vocabulary">Vocabulaire thématique</option>
+            <option value="grammar">Grammaire</option>
+            <option value="culture">Culture</option>
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            Ordre d&apos;affichage
+          </label>
+          <Input name="sortOrder" type="number" placeholder="0" min={0} />
+        </div>
+      </div>
+      <Input name="title" placeholder="Titre *" required />
+      <TextArea
+        name="body"
+        placeholder="Contenu (texte ou markdown léger) *"
+        required
+        className="min-h-[100px]"
+      />
+      <div className="space-y-1">
+        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          Déclencheurs (séparés par virgules)
+        </label>
+        <Input
+          name="triggerPatterns"
+          placeholder="ex: aa, ee, ii — laissez vide si global"
+        />
+        <p className="text-[11px] text-gray-400">
+          Si un déclencheur apparaît dans le mot, sa traduction ou sa définition, cette référence est affichée.
+        </p>
+      </div>
+      <label className="flex items-center gap-2 text-sm text-gray-700">
+        <input type="checkbox" name="isGlobal" className="rounded border-amber-300 accent-amber-600" />
+        Global — affiché sur <strong>toutes</strong> les entrées
+      </label>
+      <Button type="submit" className="w-full" disabled={busy}>
+        {busy ? "Ajout…" : "Ajouter la référence"}
+      </Button>
+    </form>
+  );
+}
+
 // ─── Administrator form ───────────────────────────────────────────────────────
 
 function AdministratorForm({ onDone }: { onDone: (msg: string) => void }) {
@@ -699,6 +788,17 @@ export function AdminForms() {
           </p>
         </div>
         <PendingDictionaryEntries />
+      </Card>
+
+      {/* Linguistic references */}
+      <Card className="space-y-4 border-violet-100/80">
+        <div>
+          <h2 className="font-bold text-gray-900">Références linguistiques</h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Ces données enrichissent automatiquement les entrées du dictionnaire. Utilisez le script <code className="font-mono text-[10px] bg-gray-100 px-1 rounded">npx tsx scripts/seed-linguistic-refs.ts</code> pour importer les données initiales de l&apos;alphabet et des règles, ou ajoutez une entrée manuellement ci-dessous.
+          </p>
+        </div>
+        <LinguisticRefForm onDone={(msg) => setStatus(msg)} />
       </Card>
 
       {/* Dictionary — flagged entries */}

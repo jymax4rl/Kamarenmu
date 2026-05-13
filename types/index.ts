@@ -74,6 +74,19 @@ export interface Paginated<T> {
   };
 }
 
+export interface LinguisticReference {
+  _id: string;
+  category: "rule" | "alphabet" | "vocabulary" | "grammar" | "culture";
+  title: string;
+  body: string;
+  triggerPatterns: string[];
+  isGlobal: boolean;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface ApiResponse<T> {
   ok: boolean;
   data?: T;

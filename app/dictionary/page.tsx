@@ -1,20 +1,32 @@
 import { connectDB } from "@/lib/mongodb";
 import { DictionaryEntry } from "@/models/DictionaryEntry";
+import { LinguisticReference } from "@/models/LinguisticReference";
 import { toPlain } from "@/lib/serialize";
 import { DictionaryClient } from "./DictionaryClient";
-import type { DictionaryEntry as DictionaryEntryType } from "@/types";
+import type {
+  DictionaryEntry as DictionaryEntryType,
+  LinguisticReference as LinguisticReferenceType,
+} from "@/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function DictionaryPage() {
   let entries: DictionaryEntryType[] = [];
+  let linguisticRefs: LinguisticReferenceType[] = [];
+
   try {
     await connectDB();
-    const docs = await DictionaryEntry.find({ status: "approved" })
-      .sort({ soninke: 1 })
-      .limit(200)
-      .lean();
-    entries = toPlain(docs) as DictionaryEntryType[];
+    const [entryDocs, refDocs] = await Promise.all([
+      DictionaryEntry.find({ status: { $in: ["approved", "flagged"] } })
+        .sort({ soninke: 1 })
+        .limit(200)
+        .lean(),
+      LinguisticReference.find({ isActive: true })
+        .sort({ sortOrder: 1, createdAt: 1 })
+        .lean(),
+    ]);
+    entries = toPlain(entryDocs) as DictionaryEntryType[];
+    linguisticRefs = toPlain(refDocs) as LinguisticReferenceType[];
   } catch {
     // DB unavailable — render empty state gracefully
   }
@@ -28,7 +40,7 @@ export default async function DictionaryPage() {
         </p>
       </div>
 
-      <DictionaryClient initialEntries={entries} />
+      <DictionaryClient initialEntries={entries} linguisticRefs={linguisticRefs} />
     </div>
   );
 }
