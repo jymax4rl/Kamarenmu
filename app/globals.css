@@ -2,22 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --soninke-cream: #fffbeb;
-}
-
 body {
-  @apply bg-soninke-cream text-gray-800 antialiased;
-  background-image: radial-gradient(
-      circle at 20% 10%,
-      rgba(217, 119, 6, 0.06) 0%,
-      transparent 45%
-    ),
-    radial-gradient(
-      circle at 80% 90%,
-      rgba(5, 150, 105, 0.05) 0%,
-      transparent 40%
-    );
+  @apply bg-white text-gray-800 antialiased;
   min-height: 100dvh;
 }
 
