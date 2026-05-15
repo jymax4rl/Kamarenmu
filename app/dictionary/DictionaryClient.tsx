@@ -310,11 +310,13 @@ function DictionaryCard({
   voteState,
   onVote,
   matchedRefs,
+  onExpand,
 }: {
   entry: DictionaryEntry;
   voteState: VoteState;
   onVote: (id: string, dir: "up" | "down") => Promise<void>;
   matchedRefs: LinguisticReference[];
+  onExpand?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const hasMore =
@@ -338,7 +340,7 @@ function DictionaryCard({
       >
         <button
           type="button"
-          onClick={() => hasMore && setExpanded((v) => !v)}
+          onClick={() => { if (hasMore) { setExpanded((v) => !v); if (!expanded) onExpand?.(); } }}
           className={`w-full text-left p-4 pb-2 ${
             hasMore ? "cursor-pointer" : "cursor-default"
           }`}
@@ -1382,12 +1384,160 @@ function Row({ label, value }: { label: string; value: string }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+// ─── Recently viewed tracker ──────────────────────────────────────────────────
+const LS_RECENTLY_VIEWED = "kama_recently_viewed";
+
+function saveRecentlyViewed(entry: DictionaryEntry) {
+  try {
+    const stored: DictionaryEntry[] = JSON.parse(localStorage.getItem(LS_RECENTLY_VIEWED) || "[]");
+    const filtered = stored.filter((e) => e._id !== entry._id);
+    const updated = [entry, ...filtered].slice(0, 10);
+    localStorage.setItem(LS_RECENTLY_VIEWED, JSON.stringify(updated));
+  } catch { /* ignore */ }
+}
+
+function loadRecentlyViewed(): DictionaryEntry[] {
+  try { return JSON.parse(localStorage.getItem(LS_RECENTLY_VIEWED) || "[]"); }
+  catch { return []; }
+}
+
+// ─── Featured word card (dark) ────────────────────────────────────────────────
+function FeaturedCard({ entry }: { entry: DictionaryEntry }) {
+  const [playing, setPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const { labelOf } = { labelOf: (v: string) => v.replace(/_/g, " ") };
+
+  function toggleAudio(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!entry.audioUrl) return;
+    if (!audioRef.current) {
+      audioRef.current = new Audio(entry.audioUrl);
+      audioRef.current.onended = () => setPlaying(false);
+    }
+    if (playing) { audioRef.current.pause(); audioRef.current.currentTime = 0; setPlaying(false); }
+    else { audioRef.current.play(); setPlaying(true); }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-[28px] bg-[#1C1C2E] text-white p-5 space-y-3 relative overflow-hidden"
+    >
+      {/* Background decoration */}
+      <div className="absolute top-0 right-0 w-40 h-40 rounded-full bg-[#00BFA5]/10 blur-2xl -translate-y-8 translate-x-8 pointer-events-none" />
+      <div className="absolute bottom-0 left-0 w-32 h-32 rounded-full bg-purple-500/10 blur-2xl translate-y-8 -translate-x-8 pointer-events-none" />
+
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-bold uppercase tracking-widest bg-[#00BFA5] text-white rounded-full px-2.5 py-1">
+          featured entry
+        </span>
+        {entry.audioUrl && (
+          <button
+            type="button"
+            onClick={toggleAudio}
+            className={`h-8 w-8 rounded-full flex items-center justify-center transition ${
+              playing ? "bg-[#00BFA5] text-white" : "bg-white/10 text-white/70 hover:bg-white/20"
+            }`}
+          >
+            <BsVolumeUpFill className="text-sm" />
+          </button>
+        )}
+      </div>
+
+      <div>
+        <h2 className="text-4xl font-black tracking-tight uppercase leading-none">
+          {entry.soninke}
+        </h2>
+        <p className="text-white/50 text-sm mt-1">
+          {entry.phonetic ? `/${entry.phonetic}/` : ""}
+          {entry.phonetic && entry.partOfSpeech ? " · " : ""}
+          {entry.partOfSpeech ? labelOf(entry.partOfSpeech).toLowerCase() : ""}
+        </p>
+      </div>
+
+      <p className="text-white/70 text-sm leading-relaxed line-clamp-2">
+        {entry.definition || entry.english || entry.french || "Mot Soninké"}
+      </p>
+
+      <div className="flex items-center gap-2 pt-1">
+        <div className="h-6 w-6 rounded-full bg-[#00BFA5] flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+          K
+        </div>
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold text-white/70 truncate">
+            Kama Renmu Jikke
+            <span className="text-white/40 ml-2 font-normal">Corpus Soninké</span>
+          </p>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Recently viewed card ──────────────────────────────────────────────────────
+function RecentCard({
+  entry,
+  onExpand,
+}: {
+  entry: DictionaryEntry;
+  onExpand: () => void;
+}) {
+  const letter = entry.soninke.charAt(0).toUpperCase();
+  const colors = ["bg-amber-100 text-amber-700", "bg-teal-100 text-teal-700",
+                   "bg-purple-100 text-purple-700", "bg-rose-100 text-rose-700",
+                   "bg-blue-100 text-blue-700"];
+  const color = colors[letter.charCodeAt(0) % colors.length];
+
+  return (
+    <button
+      type="button"
+      onClick={onExpand}
+      className="w-full glass rounded-2xl p-3.5 flex items-center gap-3 text-left hover:-translate-y-0.5 transition-all duration-200 active:scale-[0.99]"
+    >
+      {/* Letter avatar */}
+      <div className={`h-12 w-12 rounded-2xl flex items-center justify-center text-xl font-black flex-shrink-0 ${color}`}>
+        {letter}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="font-bold text-gray-900 text-sm">{entry.soninke}</span>
+          {entry.partOfSpeech && (
+            <span className="text-[10px] text-gray-400 font-medium">
+              · {entry.partOfSpeech.toLowerCase()}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">
+          {entry.definition || entry.english || entry.french || "—"}
+        </p>
+        {entry.semanticCategories && entry.semanticCategories.length > 0 && (
+          <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+            {entry.semanticCategories.slice(0, 2).map((c) => (
+              <span
+                key={c}
+                className="text-[9px] font-bold uppercase tracking-wide rounded-full bg-[#00BFA5]/10 text-[#00BFA5] px-2 py-0.5"
+              >
+                {c.replace(/_/g, " ")}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </button>
+  );
+}
+
 export function DictionaryClient({
   initialEntries,
   linguisticRefs = [],
+  featuredEntry = null,
 }: {
   initialEntries: DictionaryEntry[];
   linguisticRefs?: LinguisticReference[];
+  featuredEntry?: DictionaryEntry | null;
 }) {
   // Merge server-approved entries with any locally-saved pending submissions.
   // This runs only on the client (typeof window guard inside ls()).
@@ -1408,10 +1558,13 @@ export function DictionaryClient({
   const [query, setQuery] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [recentlyViewed, setRecentlyViewed] = useState<DictionaryEntry[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // Hydrate voterKey (client-only — needs window)
+  // Hydrate voterKey and recently viewed (client-only — needs window)
   useEffect(() => {
     setVoterKey(getOrCreateVoterKey());
+    setRecentlyViewed(loadRecentlyViewed());
   }, []);
 
   // Cast a vote ──────────────────────────────────────────────────────────────
@@ -1518,112 +1671,185 @@ export function DictionaryClient({
   ).length;
   const pendingCount = entries.filter((e) => e.status === "pending").length;
 
+  const isSearching = query.trim().length > 0;
+
   return (
-    <>
-      {/* Search + Add ─────────────────────────────────────────────────────── */}
-      <div className="flex gap-2 items-center">
+    <div className="space-y-5 pb-6">
+
+      {/* ── Word Hub Header (only when not searching) ────────────────────── */}
+      {!isSearching && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-0.5 pt-1"
+        >
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#00BFA5]">
+            Soninké · Corpus
+          </p>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight leading-none">
+            THE WORD HUB
+          </h1>
+          <p className="text-sm text-gray-400 font-medium">
+            Explorez · Contribuez · Préservez
+          </p>
+        </motion.div>
+      )}
+
+      {/* ── Sticky search + add ──────────────────────────────────────────── */}
+      <div className="flex gap-2 items-center sticky top-14 z-20 bg-white/80 backdrop-blur-md py-2 -mx-4 px-4">
         <div className="relative flex-1">
-          <HiOutlineSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-lg pointer-events-none" />
+          <HiOutlineSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg pointer-events-none" />
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Chercher un mot…"
-            className="w-full rounded-2xl border border-amber-100 bg-white pl-10 pr-4 py-3 text-sm text-gray-800 shadow-sm outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-200/60 placeholder:text-gray-400"
+            placeholder="Search for a word…"
+            className="w-full rounded-full border border-gray-200 bg-white pl-11 pr-10 py-3 text-sm text-gray-800 shadow-sm outline-none transition focus:border-[#00BFA5] focus:ring-2 focus:ring-[#00BFA5]/20 placeholder:text-gray-400"
           />
           {query && (
-            <button
-              type="button"
-              onClick={() => setQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
+            <button type="button" onClick={() => setQuery("")}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
               <IoClose className="text-lg" />
             </button>
           )}
         </div>
-        <Button
+        <button
           type="button"
           onClick={() => setShowAdd(true)}
-          className="flex-shrink-0 rounded-2xl px-5 py-3 text-sm font-semibold"
+          className="flex-shrink-0 h-12 w-12 rounded-full bg-[#00BFA5] text-white flex items-center justify-center text-xl font-bold shadow-md shadow-[#00BFA5]/30 hover:opacity-90 active:scale-95 transition"
+          aria-label="Ajouter un mot"
         >
-          + Ajouter
-        </Button>
+          +
+        </button>
       </div>
 
-      {/* Submission toast ──────────────────────────────────────────────────── */}
+      {/* Submission toast */}
       <AnimatePresence>
         {submitted && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="rounded-2xl bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800"
-          >
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+            className="rounded-2xl bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
             Merci ! Votre mot a été soumis. Il apparaît ci-dessous en attente de validation.
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Counts ──────────────────────────────────────────────────────────── */}
-      {!query && (visibleCount > 0 || pendingCount > 0) && (
-        <p className="text-xs text-gray-400 px-1">
-          {visibleCount > 0
-            ? `${visibleCount} mot${visibleCount !== 1 ? "s" : ""} dans le dictionnaire`
-            : ""}
-          {visibleCount > 0 && pendingCount > 0 ? " · " : ""}
-          {pendingCount > 0
-            ? `${pendingCount} en attente de validation`
-            : ""}
-        </p>
-      )}
-      {query && (
-        <p className="text-xs text-gray-400 px-1">
-          {filtered.length} résultat{filtered.length !== 1 ? "s" : ""} pour{" "}
-          &ldquo;{query}&rdquo;
-        </p>
-      )}
+      {/* ── Home view (no search active) ─────────────────────────────────── */}
+      {!isSearching && (
+        <div className="space-y-6">
 
-      {/* Word list ───────────────────────────────────────────────────────── */}
-      {filtered.length === 0 ? (
-        <div className="text-center py-14 text-gray-400 text-sm space-y-2">
-          <p className="text-3xl">📖</p>
-          {query ? (
-            <p>Aucun résultat pour &ldquo;{query}&rdquo;.</p>
-          ) : (
-            <p>
-              Le dictionnaire est vide pour l&apos;instant.
-              <br />
-              Soyez le premier à ajouter un mot !
-            </p>
+          {/* Featured entry */}
+          {featuredEntry ? (
+            <div className="space-y-2">
+              <FeaturedCard entry={featuredEntry} />
+            </div>
+          ) : entries.filter(e => e.status === "approved").length === 0 ? (
+            <div className="rounded-[28px] bg-[#1C1C2E] text-white p-5 space-y-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest bg-[#00BFA5] text-white rounded-full px-2.5 py-1">
+                featured entry
+              </span>
+              <h2 className="text-4xl font-black tracking-tight uppercase">SONINKÉ</h2>
+              <p className="text-white/50 text-sm">/sɔ.ni.ne/ · language</p>
+              <p className="text-white/70 text-sm leading-relaxed">
+                Langue mandé parlée en Afrique de l&apos;Ouest. Contribuez pour enrichir ce dictionnaire.
+              </p>
+            </div>
+          ) : null}
+
+          {/* Recently viewed */}
+          {recentlyViewed.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-bold text-gray-900">Recently Viewed</h2>
+                <button
+                  type="button"
+                  onClick={() => { localStorage.removeItem(LS_RECENTLY_VIEWED); setRecentlyViewed([]); }}
+                  className="text-xs text-gray-400 hover:text-gray-600"
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="space-y-2">
+                {recentlyViewed.slice(0, 5).map((entry) => (
+                  <RecentCard
+                    key={entry._id}
+                    entry={entry}
+                    onExpand={() => {
+                      setExpandedId(entry._id);
+                      setQuery(entry.soninke);
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* All words */}
+          {entries.filter(e => e.status === "approved" || e.status === "flagged").length > 0 && (
+            <div className="space-y-3">
+              <h2 className="text-base font-bold text-gray-900">
+                All Words
+                <span className="text-gray-400 font-normal text-sm ml-2">
+                  ({entries.filter(e => e.status === "approved" || e.status === "flagged").length})
+                </span>
+              </h2>
+              <div className="space-y-3">
+                {entries
+                  .filter(e => e.status === "approved" || e.status === "flagged")
+                  .map((entry) => (
+                    <DictionaryCard
+                      key={entry._id}
+                      entry={entry}
+                      voteState={voteMap[entry._id] ?? { upvotes: entry.upvotes ?? 0, downvotes: entry.downvotes ?? 0, userVote: null, status: entry.status }}
+                      onVote={castVote}
+                      matchedRefs={matchRefs(entry, linguisticRefs)}
+                      onExpand={() => saveRecentlyViewed(entry)}
+                    />
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {entries.filter(e => e.status === "approved" || e.status === "flagged").length === 0 && (
+            <div className="text-center py-10 text-gray-400 text-sm space-y-2">
+              <p className="text-3xl">📖</p>
+              <p>Le dictionnaire est vide pour l&apos;instant.<br />Soyez le premier à ajouter un mot !</p>
+            </div>
           )}
         </div>
-      ) : (
+      )}
+
+      {/* ── Search results view ───────────────────────────────────────────── */}
+      {isSearching && (
         <div className="space-y-3">
-          {filtered.map((entry) => (
-            <DictionaryCard
-              key={entry._id}
-              entry={entry}
-              voteState={
-                voteMap[entry._id] ?? {
-                  upvotes: entry.upvotes ?? 0,
-                  downvotes: entry.downvotes ?? 0,
-                  userVote: null,
-                  status: entry.status,
-                }
-              }
-              onVote={castVote}
-              matchedRefs={matchRefs(entry, linguisticRefs)}
-            />
-          ))}
+          <p className="text-xs text-gray-400 px-1">
+            {filtered.length} résultat{filtered.length !== 1 ? "s" : ""} pour &ldquo;{query}&rdquo;
+          </p>
+          {filtered.length === 0 ? (
+            <div className="text-center py-14 text-gray-400 text-sm space-y-2">
+              <p className="text-3xl">🔍</p>
+              <p>Aucun résultat pour &ldquo;{query}&rdquo;.</p>
+            </div>
+          ) : (
+            filtered.map((entry) => (
+              <DictionaryCard
+                key={entry._id}
+                entry={entry}
+                voteState={voteMap[entry._id] ?? { upvotes: entry.upvotes ?? 0, downvotes: entry.downvotes ?? 0, userVote: null, status: entry.status }}
+                onVote={castVote}
+                matchedRefs={matchRefs(entry, linguisticRefs)}
+                onExpand={() => saveRecentlyViewed(entry)}
+              />
+            ))
+          )}
         </div>
       )}
 
-      {/* Add word sheet ──────────────────────────────────────────────────── */}
+      {/* Add word sheet */}
       <AnimatePresence>
         {showAdd && (
           <AddWordSheet onClose={() => setShowAdd(false)} onSuccess={handleAddSuccess} />
         )}
       </AnimatePresence>
-    </>
+    </div>
   );
 }

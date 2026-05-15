@@ -13,10 +13,11 @@ export const dynamic = "force-dynamic";
 export default async function DictionaryPage() {
   let entries: DictionaryEntryType[] = [];
   let linguisticRefs: LinguisticReferenceType[] = [];
+  let featuredEntry: DictionaryEntryType | null = null;
 
   try {
     await connectDB();
-    const [entryDocs, refDocs] = await Promise.all([
+    const [entryDocs, refDocs, featuredDocs] = await Promise.all([
       DictionaryEntry.find({ status: { $in: ["approved", "flagged"] } })
         .sort({ soninke: 1 })
         .limit(200)
@@ -24,24 +25,26 @@ export default async function DictionaryPage() {
       LinguisticReference.find({ isActive: true })
         .sort({ sortOrder: 1, createdAt: 1 })
         .lean(),
+      // Featured = most upvoted approved entry
+      DictionaryEntry.find({ status: "approved" })
+        .sort({ upvotes: -1, createdAt: -1 })
+        .limit(1)
+        .lean(),
     ]);
     entries = toPlain(entryDocs) as DictionaryEntryType[];
     linguisticRefs = toPlain(refDocs) as LinguisticReferenceType[];
+    featuredEntry = featuredDocs[0]
+      ? (toPlain(featuredDocs[0]) as DictionaryEntryType)
+      : null;
   } catch {
     // DB unavailable — render empty state gracefully
   }
 
   return (
-    <div className="space-y-4 pb-4 pt-2">
-      <div className="px-1">
-        <h1 className="text-2xl font-bold text-gray-900">Dictionnaire</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Soninké → Anglais. Contribuez, explorez, préservez la langue.
-        </p>
-      </div>
-
-      <DictionaryClient initialEntries={entries} linguisticRefs={linguisticRefs} />
-    </div>
+    <DictionaryClient
+      initialEntries={entries}
+      linguisticRefs={linguisticRefs}
+      featuredEntry={featuredEntry}
+    />
   );
-
 }

@@ -2,73 +2,63 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AiFillHome, AiOutlineHome } from "react-icons/ai";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  BsFileText,
-  BsFileTextFill,
-  BsNewspaper,
-  BsInfoCircle,
-  BsInfoCircleFill,
-  BsPerson,
-  BsPersonFill,
-  BsBook,
-  BsBookFill,
-} from "react-icons/bs";
+  HiHome, HiSearch, HiCollection, HiLightningBolt, HiPencilAlt,
+} from "react-icons/hi";
 
-const tabs = [
-  { href: "/", label: "Home", IconOutline: AiOutlineHome, IconFill: AiFillHome },
-  {
-    href: "/articles",
-    label: "Articles",
-    IconOutline: BsFileText,
-    IconFill: BsFileTextFill,
-  },
-  { href: "/dictionary", label: "Dict.", IconOutline: BsBook, IconFill: BsBookFill },
-  { href: "/news", label: "News", IconOutline: BsNewspaper, IconFill: BsNewspaper },
-  {
-    href: "/about",
-    label: "About",
-    IconOutline: BsInfoCircle,
-    IconFill: BsInfoCircleFill,
-  },
-  {
-    href: "/account",
-    label: "Account",
-    IconOutline: BsPerson,
-    IconFill: BsPersonFill,
-  },
-];
+const TABS = [
+  { href: "/",          label: "Home",       Icon: HiHome          },
+  { href: "/dictionary", label: "Lookup",    Icon: HiSearch        },
+  { href: "/articles",  label: "Word Lists", Icon: HiCollection    },
+  { href: "/news",      label: "Challenge",  Icon: HiLightningBolt },
+  { href: "/dictionary?post=true", label: "Word Post", Icon: HiPencilAlt },
+] as const;
 
 export function BottomNav() {
   const pathname = usePathname();
 
+  function isActive(href: string) {
+    const base = href.split("?")[0];
+    return base === "/" ? pathname === "/" : pathname.startsWith(base);
+  }
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pointer-events-none">
-      <div
-        className="pointer-events-auto w-full max-w-md h-16 px-1 sm:px-3 bg-white/90 backdrop-blur-md rounded-t-3xl shadow-nav flex items-center justify-between gap-0 border-t border-amber-100/80"
-        aria-label="Main navigation"
-      >
-        {tabs.map(({ href, label, IconOutline, IconFill }) => {
-          const active =
-            href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(href);
-          const Icon = active ? IconFill : IconOutline;
+      <div className="pointer-events-auto w-full max-w-md h-[68px] px-3 bg-white border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] flex items-center justify-between gap-1">
+        {TABS.map(({ href, label, Icon }) => {
+          const active = isActive(href);
           return (
             <Link
               key={href}
               href={href}
-              className={`flex flex-col items-center gap-0.5 text-[10px] sm:text-xs font-medium transition-colors duration-200 min-w-0 flex-1 ${
-                active ? "text-amber-600" : "text-gray-400 hover:text-amber-500/80"
-              }`}
+              className="flex-shrink-0 flex items-center justify-center"
             >
-              <span className="relative flex flex-col items-center">
-                <Icon className="text-lg sm:text-xl" aria-hidden />
-                {active && (
-                  <span className="mt-0.5 h-1 w-1 rounded-full bg-amber-600" />
-                )}
-              </span>
-              {label}
+              <motion.div
+                layout
+                transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                className={`flex items-center gap-1.5 rounded-full transition-colors duration-300 ${
+                  active
+                    ? "bg-[#00BFA5] text-white px-4 py-2.5"
+                    : "text-gray-400 p-2"
+                }`}
+              >
+                <Icon className={active ? "text-lg flex-shrink-0" : "text-2xl"} />
+                <AnimatePresence mode="wait">
+                  {active && (
+                    <motion.span
+                      key="label"
+                      initial={{ opacity: 0, width: 0 }}
+                      animate={{ opacity: 1, width: "auto" }}
+                      exit={{ opacity: 0, width: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="text-[11px] font-bold whitespace-nowrap overflow-hidden"
+                    >
+                      {label}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </motion.div>
             </Link>
           );
         })}
